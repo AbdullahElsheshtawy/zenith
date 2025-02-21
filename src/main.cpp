@@ -1,5 +1,5 @@
-#include "spdlog/spdlog.h"
+#include "VulkanEngine.hpp"
 int main() {
-  spdlog::info("Hello, World!");
-  return 0;
+  VulkanEngine engine{};
+  engine.run();
 }
