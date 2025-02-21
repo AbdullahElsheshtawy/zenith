@@ -1,0 +1,10 @@
+include(../cmake/CPM.cmake)
+set(ENV{CPM_SOURCE_CACHE} "${CMAKE_CURRENT_SOURCE_DIR}")
+
+CPMAddPackage("gh:charles-lunarg/vk-bootstrap#v1.4.307")
+CPMADDPACKAGE("gh:zeux/volk#1.4.304")
+CPMADDPACKAGE("gh:libsdl-org/SDL#release-3.2.4")
+CPMADDPACKAGE("gh:gabime/spdlog#v1.15.1")
+CPMADDPACKAGE("gh:g-truc/glm#1.0.1")
+CPMADDPACKAGE("gh:spnda/fastgltf#v0.8.0")
+CPMADDPACKAGE("gh:GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator#v3.2.1")

@@ -1,0 +1,9 @@
+bin/
+
+CMakeUserPresets.json
+
+.vscode/
+.vs/
+.idea/
+.zed/
+.helix/
