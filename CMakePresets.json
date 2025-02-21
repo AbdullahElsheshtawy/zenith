@@ -2,7 +2,7 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "debug",
+      "name": "Debug",
       "displayName": "Debug",
       "generator": "Ninja",
       "architecture": {
@@ -13,14 +13,13 @@
         "value": "host=x64",
         "strategy": "external"
       },
-      "binaryDir": "${sourceDir}/bin/Debug",
-      "installDir": "${sourceDir}/out/install/Debug",
+      "binaryDir": "${sourceDir}/bin/",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
-      "name": "release",
+      "name": "Release",
       "displayName": "Release",
       "generator": "Ninja",
       "architecture": {
@@ -31,14 +30,13 @@
         "value": "host=x64",
         "strategy": "external"
       },
-      "binaryDir": "${sourceDir}/bin/Release",
-      "installDir": "${sourceDir}/out/install/Release",
+      "binaryDir": "${sourceDir}/bin/",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "relwithdebinfo",
+      "name": "RelWithDebInfo",
       "displayName": "RelWithDebInfo",
       "generator": "Ninja",
       "architecture": {
@@ -49,22 +47,20 @@
         "value": "host=x64",
         "strategy": "external"
       },
-      "binaryDir": "${sourceDir}/bin/RelWithDebInfo",
-      "installDir": "${sourceDir}/out/install/RelWithDebInfo",
+      "binaryDir": "${sourceDir}/bin/",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
     },
     {
-      "name": "asan",
+      "name": "ASAN",
       "displayName": "ASAN",
       "generator": "Ninja",
       "architecture": {
         "value": "x86",
         "strategy": "external"
       },
-      "binaryDir": "${sourceDir}/bin/ASAN",
-      "installDir": "${sourceDir}/out/install/ASAN",
+      "binaryDir": "${sourceDir}/bin/",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "ZENITH_ASAN": "ON"
@@ -73,7 +69,7 @@
     {
       "name": "clang-tidy",
       "displayName": "clang-tidy",
-      "inherits": "debug",
+      "inherits": "Debug",
       "cacheVariables": {
         "ZENITH_CLANG_TIDY": "ON"
       }
