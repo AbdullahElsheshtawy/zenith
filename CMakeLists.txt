@@ -7,7 +7,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 
 option(ZENITH_ASAN OFF "Enable address sanitizer")
-option(ZENITH_CLANG_TIDY OFF "Enable clang-tidy")
 
 if(ZENITH_ASAN)
     message("Enabled address sanitizer")
@@ -21,16 +20,7 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
 endif()
 
-if(ZENITH_CLANG_TIDY)
-    find_program(CLANG_TIDY_PROGRAM clang-tidy)
-    if(CLANG_TIDY_PROGRAM)
-        message("Found clang-tidy")
-        set(CMAKE_CXX_CLANG_TIDY ${CLANG_TIDY_PROGRAM} -p ${CMAKE_BINARY_DIR})
-        message("Enabled clang-tidy")
-    else()  
-        message(FATAL_ERROR "clang-tidy not found but ZENITH_CLANG_TIDY is enabled")
-    endif()
-endif()
+
 
 project(zenith)
 

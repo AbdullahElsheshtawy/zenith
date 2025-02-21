@@ -65,14 +65,6 @@
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "ZENITH_ASAN": "ON"
       }
-    },
-    {
-      "name": "clang-tidy",
-      "displayName": "clang-tidy",
-      "inherits": "Debug",
-      "cacheVariables": {
-        "ZENITH_CLANG_TIDY": "ON"
-      }
     }
   ]
 }
