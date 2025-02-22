@@ -60,7 +60,7 @@
         "value": "x86",
         "strategy": "external"
       },
-      "binaryDir": "${sourceDir}/bin/",
+      "binaryDir": "${sourceDir}/bin/ASAN",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "ZENITH_ASAN": "ON"

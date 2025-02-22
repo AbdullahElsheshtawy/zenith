@@ -2,6 +2,7 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_vulkan.h"
 #include "VkBootstrap.h"
+#include "VulkanInitializers.hpp"
 
 VulkanEngine::VulkanEngine() {
   SDL_Init(SDL_INIT_VIDEO);
@@ -15,11 +16,16 @@ VulkanEngine::VulkanEngine() {
 VulkanEngine::~VulkanEngine() {
   vkDestroySwapchainKHR(Device_, Swapchain_.swapchain, nullptr);
   for (const auto imageView : Swapchain_.imageViews) {
-    (vkDestroyImageView(Device_, imageView, nullptr));
+    vkDestroyImageView(Device_, imageView, nullptr);
   }
+
+  for (uint32_t frame = 0; frame < FRAMES_IN_FLIGHT; frame++) {
+    vkDestroyCommandPool(Device_, FrameData_[frame].CommandPool, nullptr);
+  }
+
   SDL_Vulkan_DestroySurface(Instance_, Surface_, nullptr);
-  (vkDestroyDevice(Device_, nullptr));
-  (vkDestroyInstance(Instance_, nullptr));
+  vkDestroyDevice(Device_, nullptr);
+  vkDestroyInstance(Instance_, nullptr);
   SDL_DestroyWindow(Window_);
 }
 
@@ -57,16 +63,14 @@ void VulkanEngine::initializeVulkan() {
   volkLoadInstance(Instance_);
   SDL_Vulkan_CreateSurface(Window_, Instance_, nullptr, &Surface_);
 
-  VkPhysicalDeviceVulkan12Features features12 = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-      .bufferDeviceAddress = true,
-  };
+  VkPhysicalDeviceVulkan12Features features12{};
+  features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+  features12.bufferDeviceAddress = true;
   features12.descriptorIndexing = true;
 
-  VkPhysicalDeviceVulkan13Features features13 = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-      .dynamicRendering = true,
-  };
+  VkPhysicalDeviceVulkan13Features features13{};
+  features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+  features13.dynamicRendering = true;
   features13.synchronization2 = true;
 
   auto vkbPhysicalDevice = vkb::PhysicalDeviceSelector(vkbInstance, Surface_)
@@ -76,11 +80,31 @@ void VulkanEngine::initializeVulkan() {
                                .select()
                                .value();
   PhysicalDevice_ = vkbPhysicalDevice.physical_device;
-
-  Device_ = vkb::DeviceBuilder(vkbPhysicalDevice).build().value().device;
+  auto vkbDevice = vkb::DeviceBuilder(vkbPhysicalDevice).build().value();
+  Device_ = vkbDevice.device;
   volkLoadDevice(Device_);
 
+  GraphicsQueue_ = vkbDevice.get_queue(vkb::QueueType::graphics).value();
+  GraphicsQueueFamilyIndex_ =
+      vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+
   createSwapchain(WindowExtent_.width, WindowExtent_.height);
+  inializeCommands();
+}
+
+void VulkanEngine::inializeCommands() {
+  VkCommandPoolCreateInfo commandPoolInfo = VulkanInit::commandPoolCreateInfo(
+      GraphicsQueueFamilyIndex_,
+      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+  for (uint32_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
+    VK_CHECK(vkCreateCommandPool(Device_, &commandPoolInfo, nullptr,
+                                 &FrameData_[i].CommandPool));
+    VkCommandBufferAllocateInfo commandBufferAllocateInfo =
+        VulkanInit::commandBufferAllocateInfo(FrameData_[i].CommandPool, 1);
+
+    VK_CHECK(vkAllocateCommandBuffers(Device_, &commandBufferAllocateInfo,
+                                      &FrameData_[i].MainCommandBuffer));
+  }
 }
 
 void VulkanEngine::createSwapchain(uint32_t width, uint32_t height) {
