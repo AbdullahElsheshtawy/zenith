@@ -52,9 +52,14 @@ impl Swapchain {
         extent: vk::Extent2D,
         old_swapchain: Option<Swapchain>,
     ) -> anyhow::Result<Self> {
+        let caps = unsafe {
+            loaders
+                .surface
+                .get_physical_device_surface_capabilities(physical_device, surface)?
+        };
         let mut info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface)
-            .min_image_count(2)
+            .min_image_count(caps.min_image_count)
             .image_format(vk::Format::B8G8R8A8_UNORM)
             .image_color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
             .image_extent(extent)
@@ -99,15 +104,7 @@ impl Swapchain {
             })
             .collect::<Result<_, _>>()?;
 
-        let extent = find_swapchain_extent(
-            unsafe {
-                loaders
-                    .surface
-                    .get_physical_device_surface_capabilities(physical_device, surface)?
-            },
-            extent.width,
-            extent.height,
-        );
+        let extent = find_swapchain_extent(caps, extent.width, extent.height);
         Ok(Self {
             swapchain,
             images,
