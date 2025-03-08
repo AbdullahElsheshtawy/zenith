@@ -23,127 +23,6 @@ pub struct Renderer {
     frames: [FrameData; Self::FRAMES_IN_FLIGHT],
 }
 
-pub struct Loaders {
-    swapchain: ash::khr::swapchain::Device,
-    surface: ash::khr::surface::Instance,
-}
-
-impl Loaders {
-    pub fn new(entry: &ash::Entry, instance: &ash::Instance, device: &ash::Device) -> Self {
-        Self {
-            swapchain: ash::khr::swapchain::Device::new(instance, device),
-            surface: ash::khr::surface::Instance::new(entry, instance),
-        }
-    }
-}
-
-pub struct Swapchain {
-    swapchain: vk::SwapchainKHR,
-    images: Vec<vk::Image>,
-    views: Vec<vk::ImageView>,
-    extent: vk::Extent2D,
-}
-
-impl Swapchain {
-    pub fn new(
-        device: &ash::Device,
-        physical_device: vk::PhysicalDevice,
-        loaders: &Loaders,
-        surface: vk::SurfaceKHR,
-        present_mode: vk::PresentModeKHR,
-        extent: vk::Extent2D,
-        old_swapchain: Option<Swapchain>,
-    ) -> anyhow::Result<Self> {
-        let caps = unsafe {
-            loaders
-                .surface
-                .get_physical_device_surface_capabilities(physical_device, surface)?
-        };
-        let mut info = vk::SwapchainCreateInfoKHR::default()
-            .surface(surface)
-            .min_image_count(caps.min_image_count)
-            .image_format(vk::Format::B8G8R8A8_UNORM)
-            .image_color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
-            .image_extent(extent)
-            .image_array_layers(1)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
-            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(present_mode)
-            .clipped(true);
-
-        if let Some(old_swapchain) = old_swapchain {
-            info.old_swapchain = old_swapchain.swapchain;
-        }
-
-        let swapchain = unsafe { loaders.swapchain.create_swapchain(&info, None) }?;
-        let images = unsafe { loaders.swapchain.get_swapchain_images(swapchain) }?;
-        let views = images
-            .iter()
-            .map(|&image| unsafe {
-                device
-                    .create_image_view(
-                        &vk::ImageViewCreateInfo::default()
-                            .image(image)
-                            .view_type(vk::ImageViewType::TYPE_2D)
-                            .format(vk::Format::B8G8R8A8_UNORM)
-                            .components(vk::ComponentMapping {
-                                r: vk::ComponentSwizzle::IDENTITY,
-                                g: vk::ComponentSwizzle::IDENTITY,
-                                b: vk::ComponentSwizzle::IDENTITY,
-                                a: vk::ComponentSwizzle::IDENTITY,
-                            })
-                            .subresource_range(
-                                vk::ImageSubresourceRange::default()
-                                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                                    .level_count(1)
-                                    .layer_count(1),
-                            ),
-                        None,
-                    )
-                    .context("Creating swapchain image views")
-            })
-            .collect::<Result<_, _>>()?;
-
-        let extent = find_swapchain_extent(caps, extent.width, extent.height);
-        Ok(Self {
-            swapchain,
-            images,
-            views,
-            extent,
-        })
-    }
-
-    fn destroy(&self, device: &ash::Device, loaders: &Loaders) {
-        unsafe { loaders.swapchain.destroy_swapchain(self.swapchain, None) };
-
-        for view in &self.views {
-            unsafe { device.destroy_image_view(*view, None) };
-        }
-    }
-}
-
-fn find_swapchain_extent(
-    caps: vk::SurfaceCapabilitiesKHR,
-    desired_width: u32,
-    desired_height: u32,
-) -> vk::Extent2D {
-    if caps.current_extent.width != u32::MAX {
-        return caps.current_extent;
-    }
-
-    vk::Extent2D {
-        width: u32::max(
-            caps.min_image_extent.width,
-            u32::min(caps.max_image_extent.width, desired_width),
-        ),
-        height: u32::max(
-            caps.min_image_extent.height,
-            u32::min(caps.max_image_extent.height, desired_height),
-        ),
-    }
-}
 impl Renderer {
     pub const FRAMES_IN_FLIGHT: usize = 2;
 
@@ -249,6 +128,162 @@ impl Drop for Renderer {
     }
 }
 
+pub struct Loaders {
+    swapchain: ash::khr::swapchain::Device,
+    surface: ash::khr::surface::Instance,
+}
+
+impl Loaders {
+    pub fn new(entry: &ash::Entry, instance: &ash::Instance, device: &ash::Device) -> Self {
+        Self {
+            swapchain: ash::khr::swapchain::Device::new(instance, device),
+            surface: ash::khr::surface::Instance::new(entry, instance),
+        }
+    }
+}
+
+pub struct Swapchain {
+    swapchain: vk::SwapchainKHR,
+    images: Vec<vk::Image>,
+    views: Vec<vk::ImageView>,
+    extent: vk::Extent2D,
+}
+
+impl Swapchain {
+    pub fn new(
+        device: &ash::Device,
+        physical_device: vk::PhysicalDevice,
+        loaders: &Loaders,
+        surface: vk::SurfaceKHR,
+        present_mode: vk::PresentModeKHR,
+        extent: vk::Extent2D,
+        old_swapchain: Option<Swapchain>,
+    ) -> anyhow::Result<Self> {
+        let caps = unsafe {
+            loaders
+                .surface
+                .get_physical_device_surface_capabilities(physical_device, surface)?
+        };
+        let mut info = vk::SwapchainCreateInfoKHR::default()
+            .surface(surface)
+            .min_image_count(caps.min_image_count)
+            .image_format(vk::Format::B8G8R8A8_UNORM)
+            .image_color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
+            .image_extent(extent)
+            .image_array_layers(1)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .pre_transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(present_mode)
+            .clipped(true);
+
+        if let Some(old_swapchain) = old_swapchain {
+            info.old_swapchain = old_swapchain.swapchain;
+        }
+
+        let swapchain = unsafe { loaders.swapchain.create_swapchain(&info, None) }?;
+        let images = unsafe { loaders.swapchain.get_swapchain_images(swapchain) }?;
+        let views = images
+            .iter()
+            .map(|&image| unsafe {
+                device
+                    .create_image_view(
+                        &vk::ImageViewCreateInfo::default()
+                            .image(image)
+                            .view_type(vk::ImageViewType::TYPE_2D)
+                            .format(vk::Format::B8G8R8A8_UNORM)
+                            .components(vk::ComponentMapping {
+                                r: vk::ComponentSwizzle::IDENTITY,
+                                g: vk::ComponentSwizzle::IDENTITY,
+                                b: vk::ComponentSwizzle::IDENTITY,
+                                a: vk::ComponentSwizzle::IDENTITY,
+                            })
+                            .subresource_range(
+                                vk::ImageSubresourceRange::default()
+                                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                    .level_count(1)
+                                    .layer_count(1),
+                            ),
+                        None,
+                    )
+                    .context("Creating swapchain image views")
+            })
+            .collect::<Result<_, _>>()?;
+
+        let extent = find_swapchain_extent(caps, extent.width, extent.height);
+        Ok(Self {
+            swapchain,
+            images,
+            views,
+            extent,
+        })
+    }
+
+    fn destroy(&self, device: &ash::Device, loaders: &Loaders) {
+        unsafe { loaders.swapchain.destroy_swapchain(self.swapchain, None) };
+
+        for view in &self.views {
+            unsafe { device.destroy_image_view(*view, None) };
+        }
+    }
+}
+
+pub struct FrameData {
+    cmd_pool: vk::CommandPool,
+    cmd_buf: vk::CommandBuffer,
+}
+
+impl FrameData {
+    pub fn new(device: &ash::Device, queue_family_idx: u32) -> anyhow::Result<Self> {
+        let cmd_pool = unsafe {
+            device.create_command_pool(
+                &vk::CommandPoolCreateInfo::default()
+                    .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                    .queue_family_index(queue_family_idx),
+                None,
+            )
+        }?;
+
+        let cmd_buf = unsafe {
+            device.allocate_command_buffers(
+                &vk::CommandBufferAllocateInfo::default()
+                    .command_pool(cmd_pool)
+                    .command_buffer_count(1)
+                    .level(vk::CommandBufferLevel::PRIMARY),
+            )
+        }?[0];
+
+        Ok(Self { cmd_pool, cmd_buf })
+    }
+
+    pub fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            device.destroy_command_pool(self.cmd_pool, None);
+        }
+    }
+}
+
+fn find_swapchain_extent(
+    caps: vk::SurfaceCapabilitiesKHR,
+    desired_width: u32,
+    desired_height: u32,
+) -> vk::Extent2D {
+    if caps.current_extent.width != u32::MAX {
+        return caps.current_extent;
+    }
+
+    vk::Extent2D {
+        width: u32::max(
+            caps.min_image_extent.width,
+            u32::min(caps.max_image_extent.width, desired_width),
+        ),
+        height: u32::max(
+            caps.min_image_extent.height,
+            u32::min(caps.max_image_extent.height, desired_height),
+        ),
+    }
+}
 fn create_device(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
@@ -292,40 +327,5 @@ fn select_queue_family(
             .find(|(_, properties)| properties.queue_flags.contains(flags))
             .map(|(idx, _)| idx as u32)
             .context("The queue family requested does not exist")
-    }
-}
-
-pub struct FrameData {
-    cmd_pool: vk::CommandPool,
-    cmd_buf: vk::CommandBuffer,
-}
-
-impl FrameData {
-    pub fn new(device: &ash::Device, queue_family_idx: u32) -> anyhow::Result<Self> {
-        let cmd_pool = unsafe {
-            device.create_command_pool(
-                &vk::CommandPoolCreateInfo::default()
-                    .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-                    .queue_family_index(queue_family_idx),
-                None,
-            )
-        }?;
-
-        let cmd_buf = unsafe {
-            device.allocate_command_buffers(
-                &vk::CommandBufferAllocateInfo::default()
-                    .command_pool(cmd_pool)
-                    .command_buffer_count(1)
-                    .level(vk::CommandBufferLevel::PRIMARY),
-            )
-        }?[0];
-
-        Ok(Self { cmd_pool, cmd_buf })
-    }
-
-    pub fn destroy(&self, device: &ash::Device) {
-        unsafe {
-            device.destroy_command_pool(self.cmd_pool, None);
-        }
     }
 }
