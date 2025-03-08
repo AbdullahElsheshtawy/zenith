@@ -19,6 +19,8 @@ pub struct Renderer {
     swapchain: Swapchain,
     graphics_queue: vk::Queue,
     graphics_queue_family: u32,
+
+    frames: [FrameData; Self::FRAMES_IN_FLIGHT],
 }
 
 pub struct Loaders {
@@ -143,6 +145,8 @@ fn find_swapchain_extent(
     }
 }
 impl Renderer {
+    pub const FRAMES_IN_FLIGHT: usize = 2;
+
     pub fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let window_size = window.inner_size();
         let entry = unsafe { ash::Entry::load() }?;
@@ -176,6 +180,11 @@ impl Renderer {
             None,
         )?;
 
+        let frames: [FrameData; Self::FRAMES_IN_FLIGHT] = std::array::from_fn(|_| {
+            FrameData::new(&device, graphics_queue_family)
+                .expect("Failed creating per frame in flight data")
+        });
+
         Ok(Self {
             window,
             entry,
@@ -187,6 +196,7 @@ impl Renderer {
             swapchain,
             graphics_queue,
             graphics_queue_family,
+            frames,
         })
     }
 }
@@ -228,7 +238,9 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             self.device.device_wait_idle().unwrap();
-
+            self.frames.iter().for_each(|frame| {
+                frame.destroy(&self.device);
+            });
             self.swapchain.destroy(&self.device, &self.loaders);
             self.loaders.surface.destroy_surface(self.surface, None);
             self.device.destroy_device(None);
@@ -280,5 +292,40 @@ fn select_queue_family(
             .find(|(_, properties)| properties.queue_flags.contains(flags))
             .map(|(idx, _)| idx as u32)
             .context("The queue family requested does not exist")
+    }
+}
+
+pub struct FrameData {
+    cmd_pool: vk::CommandPool,
+    cmd_buf: vk::CommandBuffer,
+}
+
+impl FrameData {
+    pub fn new(device: &ash::Device, queue_family_idx: u32) -> anyhow::Result<Self> {
+        let cmd_pool = unsafe {
+            device.create_command_pool(
+                &vk::CommandPoolCreateInfo::default()
+                    .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                    .queue_family_index(queue_family_idx),
+                None,
+            )
+        }?;
+
+        let cmd_buf = unsafe {
+            device.allocate_command_buffers(
+                &vk::CommandBufferAllocateInfo::default()
+                    .command_pool(cmd_pool)
+                    .command_buffer_count(1)
+                    .level(vk::CommandBufferLevel::PRIMARY),
+            )
+        }?[0];
+
+        Ok(Self { cmd_pool, cmd_buf })
+    }
+
+    pub fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            device.destroy_command_pool(self.cmd_pool, None);
+        }
     }
 }
