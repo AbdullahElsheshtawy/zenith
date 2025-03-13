@@ -21,7 +21,7 @@ impl App {
         Ok(App { window, renderer })
     }
 
-    fn window_event(&self, event: winit::event::WindowEvent) -> bool {
+    fn window_event(&mut self, event: winit::event::WindowEvent) -> bool {
         use winit::event::WindowEvent;
         match event {
             WindowEvent::CloseRequested => false,
@@ -39,6 +39,10 @@ impl App {
                     KeyCode::Escape => false,
                     _ => true,
                 }
+            }
+            WindowEvent::RedrawRequested => {
+                self.renderer.draw();
+                true
             }
             _ => true,
         }
