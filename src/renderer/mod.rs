@@ -1,4 +1,5 @@
 mod framedata;
+mod image;
 mod loaders;
 mod swapchain;
 mod transitionable;
@@ -6,6 +7,8 @@ mod util;
 use anyhow::Context;
 use ash::vk;
 use framedata::FrameData;
+use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use image::Image;
 use loaders::Loaders;
 use std::sync::Arc;
 use swapchain::Swapchain;
@@ -29,8 +32,12 @@ pub struct Renderer {
     graphics_queue: vk::Queue,
     graphics_queue_family: u32,
 
+    draw_image: Image,
+
     frames: [FrameData; Self::FRAMES_IN_FLIGHT],
     frame_number: usize,
+
+    allocator: Allocator,
 }
 
 impl Renderer {
@@ -74,6 +81,30 @@ impl Renderer {
                 .expect("Failed creating per frame in flight data")
         });
 
+        let mut allocator = Allocator::new(&AllocatorCreateDesc {
+            instance: instance.clone(),
+            device: device.clone(),
+            physical_device,
+            debug_settings: Default::default(),
+            buffer_device_address: true,
+            allocation_sizes: Default::default(),
+        })?;
+        let draw_image_usage_flags = vk::ImageUsageFlags::TRANSFER_SRC
+            | vk::ImageUsageFlags::TRANSFER_DST
+            | vk::ImageUsageFlags::STORAGE
+            | vk::ImageUsageFlags::COLOR_ATTACHMENT;
+        let draw_image = Image::new(
+            &device,
+            &mut allocator,
+            vk::Extent3D {
+                width: window_size.width,
+                height: window_size.height,
+                depth: 1,
+            },
+            vk::Format::R16G16B16A16_SFLOAT,
+            draw_image_usage_flags,
+        )?;
+
         Ok(Self {
             window,
             entry,
@@ -87,6 +118,8 @@ impl Renderer {
             graphics_queue_family,
             frames,
             frame_number: 0,
+            draw_image,
+            allocator,
         })
     }
     pub fn get_current_frame(&self) -> &FrameData {
@@ -126,39 +159,47 @@ impl Renderer {
 
         let swapchain_image = self.swapchain.get_image(swapchain_image_index);
 
-        swapchain_image.transition(
+        self.draw_image.transition(
             &self.device,
             cmd_buf,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::GENERAL,
         );
 
-        let clear_value = vk::ClearColorValue {
-            float32: [
-                0.0,
-                0.0,
-                f32::abs(f32::sin(self.frame_number as f32 / 120.0)),
-                0.0,
-            ],
-        };
+        self.draw_background(cmd_buf);
 
-        unsafe {
-            self.device.cmd_clear_color_image(
-                cmd_buf,
-                swapchain_image,
-                vk::ImageLayout::GENERAL,
-                &clear_value,
-                &[util::image_subresource_range(vk::ImageAspectFlags::COLOR)],
-            )
-        };
+        self.draw_image.transition(
+            &self.device,
+            cmd_buf,
+            vk::ImageLayout::GENERAL,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        );
 
         swapchain_image.transition(
             &self.device,
             cmd_buf,
-            vk::ImageLayout::GENERAL,
-            vk::ImageLayout::PRESENT_SRC_KHR,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         );
 
+        util::copy_image_to_image(
+            &self.device,
+            cmd_buf,
+            self.draw_image.image(),
+            swapchain_image,
+            vk::Extent2D {
+                width: self.draw_image.extent().width,
+                height: self.draw_image.extent().height,
+            },
+            self.swapchain.extent,
+        );
+
+        swapchain_image.transition(
+            &self.device,
+            cmd_buf,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::ImageLayout::PRESENT_SRC_KHR,
+        );
         unsafe { self.device.end_command_buffer(cmd_buf) }.unwrap();
 
         // prepare the submission
@@ -199,6 +240,27 @@ impl Renderer {
             .unwrap();
         self.frame_number += 1;
     }
+
+    fn draw_background(&self, cmd_buf: vk::CommandBuffer) {
+        let clear_value = vk::ClearColorValue {
+            float32: [
+                0.0,
+                0.0,
+                f32::abs(f32::sin(self.frame_number as f32 / 120.0)),
+                0.0,
+            ],
+        };
+
+        unsafe {
+            self.device.cmd_clear_color_image(
+                cmd_buf,
+                self.draw_image.image(),
+                vk::ImageLayout::GENERAL,
+                &clear_value,
+                &[util::image_subresource_range(vk::ImageAspectFlags::COLOR)],
+            )
+        };
+    }
 }
 
 fn create_instance(window: &Window, entry: &ash::Entry) -> anyhow::Result<ash::Instance> {
@@ -238,11 +300,13 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             self.device.device_wait_idle().unwrap();
-            self.frames.iter().for_each(|frame| {
+            self.frames.iter_mut().for_each(|frame| {
                 frame.destroy(&self.device);
             });
+            self.draw_image.destroy(&self.device, &mut self.allocator);
             self.swapchain.destroy(&self.device, &self.loaders);
             self.loaders.surface.destroy_surface(self.surface, None);
+
             self.device.destroy_device(None);
             self.instance.destroy_instance(None);
         }

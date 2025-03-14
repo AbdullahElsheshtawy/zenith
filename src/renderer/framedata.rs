@@ -44,7 +44,7 @@ impl FrameData {
         })
     }
 
-    pub fn destroy(&self, device: &ash::Device) {
+    pub fn destroy(&mut self, device: &ash::Device) {
         unsafe {
             device.destroy_command_pool(self.cmd_pool, None);
             device.destroy_fence(self.render_fence, None);
