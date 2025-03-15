@@ -1,10 +1,10 @@
 use ash::vk;
 
-use super::util;
+use super::{context::RenderContext, util};
 pub trait Transitionable {
     fn transition(
         &self,
-        device: &ash::Device,
+        rcx: &RenderContext,
         cmd_buf: vk::CommandBuffer,
         current_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
@@ -14,7 +14,7 @@ pub trait Transitionable {
 impl Transitionable for vk::Image {
     fn transition(
         &self,
-        device: &ash::Device,
+        rcx: &RenderContext,
         cmd_buf: vk::CommandBuffer,
         current_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
@@ -36,6 +36,6 @@ impl Transitionable for vk::Image {
             .image(*self)];
 
         let dep_info = vk::DependencyInfo::default().image_memory_barriers(&image_barrier);
-        unsafe { device.cmd_pipeline_barrier2(cmd_buf, &dep_info) };
+        unsafe { rcx.device.cmd_pipeline_barrier2(cmd_buf, &dep_info) };
     }
 }
