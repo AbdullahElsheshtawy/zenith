@@ -24,8 +24,8 @@ impl RenderContext {
 
     pub fn destroy(&mut self) {
         unsafe {
+            self.device.destroy_device(None);
             self.instance.destroy_instance(None);
-            self.device.destroy_device(None)
         };
     }
 }
