@@ -7,10 +7,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let path = entry?.path();
 
         match path.extension() {
-            Some(ext) => match ext.to_str().unwrap() {
-                "spv" => continue,
-                _ => {}
-            },
+            Some(ext) => {
+                if ext.to_str().unwrap() == "spv" {
+                    continue;
+                }
+            }
             None => continue,
         }
         let path_string = String::from(path.to_str().unwrap());
@@ -22,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .output()?;
 
         if !output.status.success() {
-            return Err(format!("{}", String::from_utf8(output.stdout)?).into());
+            return Err(String::from_utf8(output.stdout)?.to_string().into());
         }
     }
 

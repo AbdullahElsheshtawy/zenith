@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use ash::vk;
 pub struct DescriptorLayoutBuilder<'a> {
     bindings: Vec<vk::DescriptorSetLayoutBinding<'a>>,
 }
 
-impl<'a> DescriptorLayoutBuilder<'a> {
+impl DescriptorLayoutBuilder<'_> {
     pub fn new() -> Self {
         Self {
             bindings: Vec::new(),

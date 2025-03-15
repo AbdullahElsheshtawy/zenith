@@ -1,7 +1,5 @@
-use std::sync::{Arc, Mutex};
-
 use ash::vk;
-use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme, Allocator};
+use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
 
 use super::{
     context::RenderContext, deletion_queue::DeletionQueue, transitionable::Transitionable, util,
@@ -15,9 +13,9 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn new<'a>(
+    pub fn new(
         rcx: &mut RenderContext,
-        deletion_queue: &mut DeletionQueue<'a>,
+        deletion_queue: &mut DeletionQueue<'_>,
         extent: vk::Extent3D,
         format: vk::Format,
         usage_flags: vk::ImageUsageFlags,
@@ -96,6 +94,6 @@ impl Transitionable for Image {
         new_layout: vk::ImageLayout,
     ) {
         self.image
-            .transition(&rcx, cmd_buf, current_layout, new_layout);
+            .transition(rcx, cmd_buf, current_layout, new_layout);
     }
 }

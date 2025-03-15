@@ -1,7 +1,8 @@
 use super::context::RenderContext;
 
+type DeletableFn<'a> = Box<dyn FnOnce(&mut RenderContext) + 'a>;
 pub struct DeletionQueue<'a> {
-    deletors: Vec<Box<dyn FnOnce(&mut RenderContext) + 'a>>,
+    deletors: Vec<DeletableFn<'a>>,
 }
 
 impl<'a> DeletionQueue<'a> {

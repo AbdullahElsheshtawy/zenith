@@ -14,7 +14,7 @@ pub fn load_shader_module(
     file.seek(std::io::SeekFrom::Start(0))?;
     let mut code = vec![0u32; size / std::mem::size_of::<u32>()];
 
-    file.read(unsafe { std::slice::from_raw_parts_mut(code.as_mut_ptr().cast(), size) })?;
+    file.read_exact(unsafe { std::slice::from_raw_parts_mut(code.as_mut_ptr().cast(), size) })?;
 
     Ok(unsafe {
         device.create_shader_module(&vk::ShaderModuleCreateInfo::default().code(&code), None)
