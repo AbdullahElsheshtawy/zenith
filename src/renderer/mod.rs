@@ -202,9 +202,7 @@ impl Renderer<'_> {
         Ok(Self {
             window,
             entry,
-            instance,
             loaders,
-            physical_device,
             surface,
             swapchain,
             graphics_queue,
