@@ -1,30 +1,33 @@
-use ash::vk;
-use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, Allocator};
+use std::sync::{Arc, Mutex};
 
-use super::{transitionable::Transitionable, util};
+use ash::vk;
+use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme, Allocator};
+
+use super::{
+    context::RenderContext, deletion_queue::DeletionQueue, transitionable::Transitionable, util,
+};
 #[derive(Debug)]
 pub struct Image {
     image: vk::Image,
     view: vk::ImageView,
     extent: vk::Extent3D,
     format: vk::Format,
-    allocation: Option<Allocation>,
 }
 
 impl Image {
-    pub fn new(
-        device: &ash::Device,
-        allocator: &mut Allocator,
+    pub fn new<'a>(
+        rcx: &mut RenderContext,
+        deletion_queue: &mut DeletionQueue<'a>,
         extent: vk::Extent3D,
         format: vk::Format,
         usage_flags: vk::ImageUsageFlags,
     ) -> anyhow::Result<Self> {
         let image_info = util::image_create_info(format, usage_flags, extent);
 
-        let image = unsafe { device.create_image(&image_info, None) }?;
-        let reqs = unsafe { device.get_image_memory_requirements(image) };
+        let image = unsafe { rcx.device.create_image(&image_info, None) }?;
+        let reqs = unsafe { rcx.device.get_image_memory_requirements(image) };
 
-        let allocation = allocator.allocate(&AllocationCreateDesc {
+        let allocation = rcx.allocator.allocate(&AllocationCreateDesc {
             name: "Image",
             requirements: reqs,
             location: gpu_allocator::MemoryLocation::GpuOnly,
@@ -32,34 +35,46 @@ impl Image {
             allocation_scheme: AllocationScheme::DedicatedImage(image),
         })?;
 
-        unsafe { device.bind_image_memory(image, allocation.memory(), allocation.offset()) }?;
+        unsafe {
+            rcx.device
+                .bind_image_memory(image, allocation.memory(), allocation.offset())
+        }?;
 
         let view = unsafe {
-            device.create_image_view(
+            rcx.device.create_image_view(
                 &util::image_view_create_info(format, image, vk::ImageAspectFlags::COLOR),
                 None,
             )
         }?;
 
+        deletion_queue.push(Box::new(move |rcx: &mut RenderContext| {
+            unsafe {
+                rcx.device.destroy_image_view(view, None);
+                rcx.device.destroy_image(image, None);
+            }
+            rcx.allocator.free(allocation).unwrap();
+        }));
         Ok(Self {
             image,
             view,
             extent,
             format,
-            allocation: Some(allocation),
         })
     }
 
-    pub fn destroy(&mut self, device: &ash::Device, allocator: &mut Allocator) {
-        unsafe {
-            device.destroy_image_view(self.view, None);
-            device.destroy_image(self.image, None);
-        }
-        if let Some(allocation) = self.allocation.take() {
-            allocator.free(allocation).unwrap();
-        }
-    }
+    // pub fn destroy(&mut self, rcx.device: &ash::rcx.Device, allocator: &mut Allocator) {
+    //     unsafe {
+    //         rcx.device.destroy_image_view(self.view, None);
+    //         rcx.device.destroy_image(self.image, None);
+    //     }
+    //     if let Some(allocation) = self.allocation.take() {
+    //         allocator.free(allocation).unwrap();
+    //     }
+    // }
 
+    pub fn view(&self) -> vk::ImageView {
+        self.view
+    }
     pub fn format(&self) -> vk::Format {
         self.format
     }
@@ -75,12 +90,12 @@ impl Image {
 impl Transitionable for Image {
     fn transition(
         &self,
-        device: &ash::Device,
+        rcx: &RenderContext,
         cmd_buf: vk::CommandBuffer,
         current_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
     ) {
         self.image
-            .transition(device, cmd_buf, current_layout, new_layout);
+            .transition(&rcx, cmd_buf, current_layout, new_layout);
     }
 }

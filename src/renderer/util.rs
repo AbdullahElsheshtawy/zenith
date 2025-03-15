@@ -1,7 +1,27 @@
+use std::io::{Read, Seek};
+
 use ash::vk;
 
-pub fn copy_image_to_image(
+use super::context::RenderContext;
+
+pub fn load_shader_module(
+    file_path: &str,
     device: &ash::Device,
+) -> anyhow::Result<vk::ShaderModule> {
+    let mut file = std::fs::File::open(file_path)?;
+
+    let size = file.seek(std::io::SeekFrom::End(0))? as usize;
+    file.seek(std::io::SeekFrom::Start(0))?;
+    let mut code = vec![0u32; size / std::mem::size_of::<u32>()];
+
+    file.read(unsafe { std::slice::from_raw_parts_mut(code.as_mut_ptr().cast(), size) })?;
+
+    Ok(unsafe {
+        device.create_shader_module(&vk::ShaderModuleCreateInfo::default().code(&code), None)
+    }?)
+}
+pub fn copy_image_to_image(
+    rcx: &RenderContext,
     cmd_buf: vk::CommandBuffer,
     src: vk::Image,
     dst: vk::Image,
@@ -44,7 +64,7 @@ pub fn copy_image_to_image(
         .filter(vk::Filter::LINEAR)
         .regions(&blit_region);
 
-    unsafe { device.cmd_blit_image2(cmd_buf, &blit_info) };
+    unsafe { rcx.device.cmd_blit_image2(cmd_buf, &blit_info) };
 }
 pub fn image_create_info(
     format: vk::Format,

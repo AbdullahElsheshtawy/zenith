@@ -1,3 +1,6 @@
+mod context;
+mod deletion_queue;
+mod descriptors;
 mod framedata;
 mod image;
 mod loaders;
@@ -6,6 +9,9 @@ mod transitionable;
 mod util;
 use anyhow::Context;
 use ash::vk;
+use context::RenderContext;
+use deletion_queue::DeletionQueue;
+use descriptors::{DescriptorAllocator, DescriptorLayoutBuilder, PoolSizeRatio};
 use framedata::FrameData;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use image::Image;
@@ -18,14 +24,14 @@ use winit::{
     window::Window,
 };
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     window: Arc<Window>,
     entry: ash::Entry,
     instance: ash::Instance,
-    device: ash::Device,
     loaders: Loaders,
     physical_device: vk::PhysicalDevice,
 
+    rcx: RenderContext,
     surface: vk::SurfaceKHR,
 
     swapchain: Swapchain,
@@ -33,14 +39,21 @@ pub struct Renderer {
     graphics_queue_family: u32,
 
     draw_image: Image,
+    draw_image_descriptors: vk::DescriptorSet,
+    draw_image_descriptor_layout: vk::DescriptorSetLayout,
 
-    frames: [FrameData; Self::FRAMES_IN_FLIGHT],
+    gradient_pipeline: vk::Pipeline,
+    gradient_pipeline_layout: vk::PipelineLayout,
+
+    frames: [FrameData; Renderer::FRAMES_IN_FLIGHT],
     frame_number: usize,
 
-    allocator: Allocator,
+    global_descriptor_allocator: DescriptorAllocator,
+
+    deletion_queue: DeletionQueue<'a>,
 }
 
-impl Renderer {
+impl Renderer<'_> {
     pub const FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new(window: Arc<Window>) -> anyhow::Result<Self> {
@@ -51,8 +64,17 @@ impl Renderer {
         let graphics_queue_family =
             select_queue_family(&instance, physical_device, vk::QueueFlags::GRAPHICS)?;
         let device = create_device(&instance, physical_device, graphics_queue_family)?;
-        let loaders = Loaders::new(&entry, &instance, &device);
-        let graphics_queue = unsafe { device.get_device_queue(graphics_queue_family, 0) };
+        let allocator = Allocator::new(&AllocatorCreateDesc {
+            instance: instance.clone(),
+            device: device.clone(),
+            physical_device,
+            debug_settings: Default::default(),
+            buffer_device_address: true,
+            allocation_sizes: Default::default(),
+        })?;
+        let mut rcx = RenderContext::new(device, allocator);
+        let loaders = Loaders::new(&entry, &instance, &rcx.device);
+        let graphics_queue = unsafe { rcx.device.get_device_queue(graphics_queue_family, 0) };
         let surface = unsafe {
             ash_window::create_surface(
                 &entry,
@@ -64,7 +86,7 @@ impl Renderer {
         }?;
 
         let swapchain = Swapchain::new(
-            &device,
+            &rcx.device,
             physical_device,
             surface,
             loaders.clone(),
@@ -76,26 +98,19 @@ impl Renderer {
             None,
         )?;
 
-        let frames: [FrameData; Self::FRAMES_IN_FLIGHT] = std::array::from_fn(|_| {
-            FrameData::new(&device, graphics_queue_family)
+        let frames: [FrameData; Renderer::FRAMES_IN_FLIGHT] = std::array::from_fn(|_| {
+            FrameData::new(&rcx.device, graphics_queue_family)
                 .expect("Failed creating per frame in flight data")
         });
 
-        let mut allocator = Allocator::new(&AllocatorCreateDesc {
-            instance: instance.clone(),
-            device: device.clone(),
-            physical_device,
-            debug_settings: Default::default(),
-            buffer_device_address: true,
-            allocation_sizes: Default::default(),
-        })?;
+        let mut deletion_queue = DeletionQueue::new();
         let draw_image_usage_flags = vk::ImageUsageFlags::TRANSFER_SRC
             | vk::ImageUsageFlags::TRANSFER_DST
             | vk::ImageUsageFlags::STORAGE
             | vk::ImageUsageFlags::COLOR_ATTACHMENT;
         let draw_image = Image::new(
-            &device,
-            &mut allocator,
+            &mut rcx,
+            &mut deletion_queue,
             vk::Extent3D {
                 width: window_size.width,
                 height: window_size.height,
@@ -105,11 +120,91 @@ impl Renderer {
             draw_image_usage_flags,
         )?;
 
+        let global_descriptor_allocator = DescriptorAllocator::new(
+            &rcx.device,
+            10,
+            &[PoolSizeRatio {
+                ty: vk::DescriptorType::STORAGE_IMAGE,
+                ratio: 1.0,
+            }; 1],
+        )?;
+        let draw_image_descriptor_layout = DescriptorLayoutBuilder::new()
+            .add_binding(0, vk::DescriptorType::STORAGE_IMAGE)
+            .build(
+                &rcx.device,
+                vk::ShaderStageFlags::COMPUTE,
+                None,
+                vk::DescriptorSetLayoutCreateFlags::empty(),
+            )?;
+
+        let draw_image_descriptors =
+            global_descriptor_allocator.allocate(&rcx.device, draw_image_descriptor_layout)?;
+        let img_info = [vk::DescriptorImageInfo::default()
+            .image_layout(vk::ImageLayout::GENERAL)
+            .image_view(draw_image.view())];
+
+        let draw_image_write = [vk::WriteDescriptorSet::default()
+            .dst_binding(0)
+            .dst_set(draw_image_descriptors)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .image_info(&img_info)];
+
+        unsafe {
+            rcx.device.update_descriptor_sets(&draw_image_write, &[]);
+        }
+
+        deletion_queue.push(Box::new(move |rcx: &mut RenderContext| {
+            global_descriptor_allocator.destroy(&rcx.device);
+            unsafe {
+                rcx.device
+                    .destroy_descriptor_set_layout(draw_image_descriptor_layout, None)
+            };
+        }));
+
+        let gradient_pipeline_layout = unsafe {
+            rcx.device.create_pipeline_layout(
+                &vk::PipelineLayoutCreateInfo::default()
+                    .set_layouts(&[draw_image_descriptor_layout]),
+                None,
+            )
+        }?;
+
+        let shader_module = util::load_shader_module("./shaders/gradient.comp.spv", &rcx.device)?;
+
+        let stage_info = vk::PipelineShaderStageCreateInfo::default()
+            .stage(vk::ShaderStageFlags::COMPUTE)
+            .module(shader_module)
+            .name(c"main");
+
+        let pipeline_info = [vk::ComputePipelineCreateInfo::default()
+            .layout(gradient_pipeline_layout)
+            .stage(stage_info)];
+
+        let gradient_pipeline = match unsafe {
+            rcx.device
+                .create_compute_pipelines(vk::PipelineCache::null(), &pipeline_info, None)
+        } {
+            Ok(ps) => ps[0],
+            Err((ps, err)) => {
+                ps.iter().for_each(|pl| unsafe {
+                    rcx.device.destroy_pipeline(*pl, None);
+                });
+
+                anyhow::bail!("Error Creating pipelines: {err}");
+            }
+        };
+
+        deletion_queue.push(Box::new(move |rcx: &mut RenderContext| unsafe {
+            rcx.device.destroy_shader_module(shader_module, None);
+            rcx.device
+                .destroy_pipeline_layout(gradient_pipeline_layout, None);
+            rcx.device.destroy_pipeline(gradient_pipeline, None);
+        }));
+
         Ok(Self {
             window,
             entry,
             instance,
-            device,
             loaders,
             physical_device,
             surface,
@@ -119,11 +214,18 @@ impl Renderer {
             frames,
             frame_number: 0,
             draw_image,
-            allocator,
+            draw_image_descriptors,
+            draw_image_descriptor_layout,
+            global_descriptor_allocator,
+            gradient_pipeline,
+            gradient_pipeline_layout,
+            deletion_queue,
+            rcx,
         })
     }
+
     pub fn get_current_frame(&self) -> &FrameData {
-        &self.frames[self.frame_number % Self::FRAMES_IN_FLIGHT]
+        &self.frames[self.frame_number % Renderer::FRAMES_IN_FLIGHT]
     }
     pub fn draw(&mut self) {
         let get_current_frame = self.get_current_frame();
@@ -131,10 +233,11 @@ impl Renderer {
         let cmd_buf = frame.cmd_buf;
 
         unsafe {
-            self.device
+            self.rcx
+                .device
                 .wait_for_fences(&[frame.render_fence], true, u64::MAX)
                 .unwrap();
-            self.device.reset_fences(&[frame.render_fence]).unwrap();
+            self.rcx.device.reset_fences(&[frame.render_fence]).unwrap();
         }
         let (swapchain_image_index, _) = self
             .swapchain
@@ -142,13 +245,15 @@ impl Renderer {
             .unwrap();
 
         unsafe {
-            self.device
+            self.rcx
+                .device
                 .reset_command_buffer(cmd_buf, vk::CommandBufferResetFlags::empty())
         }
         .unwrap();
 
         unsafe {
-            self.device
+            self.rcx
+                .device
                 .begin_command_buffer(
                     cmd_buf,
                     &vk::CommandBufferBeginInfo::default()
@@ -160,7 +265,7 @@ impl Renderer {
         let swapchain_image = self.swapchain.get_image(swapchain_image_index);
 
         self.draw_image.transition(
-            &self.device,
+            &self.rcx,
             cmd_buf,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::GENERAL,
@@ -169,21 +274,21 @@ impl Renderer {
         self.draw_background(cmd_buf);
 
         self.draw_image.transition(
-            &self.device,
+            &self.rcx,
             cmd_buf,
             vk::ImageLayout::GENERAL,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
         );
 
         swapchain_image.transition(
-            &self.device,
+            &self.rcx,
             cmd_buf,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         );
 
         util::copy_image_to_image(
-            &self.device,
+            &self.rcx,
             cmd_buf,
             self.draw_image.image(),
             swapchain_image,
@@ -195,12 +300,12 @@ impl Renderer {
         );
 
         swapchain_image.transition(
-            &self.device,
+            &self.rcx,
             cmd_buf,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::PRESENT_SRC_KHR,
         );
-        unsafe { self.device.end_command_buffer(cmd_buf) }.unwrap();
+        unsafe { self.rcx.device.end_command_buffer(cmd_buf) }.unwrap();
 
         // prepare the submission
         // wait on the present semaphore because it is signaled when the swapchain is ready
@@ -222,7 +327,8 @@ impl Renderer {
         )];
 
         unsafe {
-            self.device
+            self.rcx
+                .device
                 .queue_submit2(self.graphics_queue, &submit_info, frame.render_fence)
         }
         .unwrap();
@@ -242,24 +348,29 @@ impl Renderer {
     }
 
     fn draw_background(&self, cmd_buf: vk::CommandBuffer) {
-        let clear_value = vk::ClearColorValue {
-            float32: [
-                0.0,
-                0.0,
-                f32::abs(f32::sin(self.frame_number as f32 / 120.0)),
-                0.0,
-            ],
-        };
-
         unsafe {
-            self.device.cmd_clear_color_image(
+            self.rcx.device.cmd_bind_pipeline(
                 cmd_buf,
-                self.draw_image.image(),
-                vk::ImageLayout::GENERAL,
-                &clear_value,
-                &[util::image_subresource_range(vk::ImageAspectFlags::COLOR)],
-            )
-        };
+                vk::PipelineBindPoint::COMPUTE,
+                self.gradient_pipeline,
+            );
+
+            self.rcx.device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.gradient_pipeline_layout,
+                0,
+                &[self.draw_image_descriptors],
+                &[],
+            );
+
+            self.rcx.device.cmd_dispatch(
+                cmd_buf,
+                f32::ceil(self.draw_image.extent().width as f32 / 16.0).round() as u32,
+                f32::ceil(self.draw_image.extent().height as f32 / 16.0).round() as u32,
+                1,
+            );
+        }
     }
 }
 
@@ -296,18 +407,19 @@ fn pick_physical_device(instance: &ash::Instance) -> anyhow::Result<vk::Physical
     }
 }
 
-impl Drop for Renderer {
+impl Drop for Renderer<'_> {
     fn drop(&mut self) {
         unsafe {
-            self.device.device_wait_idle().unwrap();
+            self.rcx.device.device_wait_idle().unwrap();
             self.frames.iter_mut().for_each(|frame| {
-                frame.destroy(&self.device);
+                frame.destroy(&self.rcx.device);
             });
-            self.draw_image.destroy(&self.device, &mut self.allocator);
-            self.swapchain.destroy(&self.device, &self.loaders);
+
+            self.deletion_queue.flush(&mut self.rcx);
+            self.swapchain.destroy(&self.rcx.device, &self.loaders);
             self.loaders.surface.destroy_surface(self.surface, None);
 
-            self.device.destroy_device(None);
+            self.rcx.destroy();
             self.instance.destroy_instance(None);
         }
     }
