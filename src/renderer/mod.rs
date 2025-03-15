@@ -27,9 +27,7 @@ use winit::{
 pub struct Renderer<'a> {
     window: Arc<Window>,
     entry: ash::Entry,
-    instance: ash::Instance,
     loaders: Loaders,
-    physical_device: vk::PhysicalDevice,
 
     rcx: RenderContext,
     surface: vk::SurfaceKHR,
@@ -72,13 +70,13 @@ impl Renderer<'_> {
             buffer_device_address: true,
             allocation_sizes: Default::default(),
         })?;
-        let mut rcx = RenderContext::new(device, allocator);
-        let loaders = Loaders::new(&entry, &instance, &rcx.device);
+        let mut rcx = RenderContext::new(instance, physical_device, device, allocator);
+        let loaders = Loaders::new(&entry, &rcx.instance, &rcx.device);
         let graphics_queue = unsafe { rcx.device.get_device_queue(graphics_queue_family, 0) };
         let surface = unsafe {
             ash_window::create_surface(
                 &entry,
-                &instance,
+                &rcx.instance,
                 window.display_handle()?.as_raw(),
                 window.window_handle()?.as_raw(),
                 None,
@@ -420,7 +418,6 @@ impl Drop for Renderer<'_> {
             self.loaders.surface.destroy_surface(self.surface, None);
 
             self.rcx.destroy();
-            self.instance.destroy_instance(None);
         }
     }
 }
