@@ -60,16 +60,6 @@ impl Image {
         })
     }
 
-    // pub fn destroy(&mut self, rcx.device: &ash::rcx.Device, allocator: &mut Allocator) {
-    //     unsafe {
-    //         rcx.device.destroy_image_view(self.view, None);
-    //         rcx.device.destroy_image(self.image, None);
-    //     }
-    //     if let Some(allocation) = self.allocation.take() {
-    //         allocator.free(allocation).unwrap();
-    //     }
-    // }
-
     pub fn view(&self) -> vk::ImageView {
         self.view
     }
