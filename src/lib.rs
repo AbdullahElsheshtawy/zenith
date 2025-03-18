@@ -8,12 +8,12 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
-pub struct App {
+pub struct App<'a> {
     window: Arc<Window>,
-    renderer: Renderer,
+    renderer: Renderer<'a>,
 }
 
-impl App {
+impl App<'_> {
     pub fn new(event_loop: &winit::event_loop::ActiveEventLoop) -> anyhow::Result<Self> {
         let window =
             Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Zenith"))?);
@@ -21,9 +21,9 @@ impl App {
         Ok(App { window, renderer })
     }
 
-    fn window_event(&mut self, event: winit::event::WindowEvent) -> bool {
+    fn window_event(&mut self, window_event: winit::event::WindowEvent) -> bool {
         use winit::event::WindowEvent;
-        match event {
+        match window_event {
             WindowEvent::CloseRequested => false,
             WindowEvent::KeyboardInput {
                 event:
@@ -48,25 +48,25 @@ impl App {
         }
     }
 }
-pub enum AppState {
+pub enum AppState<'a> {
     Initializing,
-    Running(App),
+    Running(App<'a>),
     Closing,
 }
 
-impl AppState {
+impl AppState<'_> {
     pub fn new() -> Self {
         AppState::Initializing
     }
 }
 
-impl Default for AppState {
+impl Default for AppState<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ApplicationHandler for AppState {
+impl ApplicationHandler for AppState<'_> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         *self = AppState::Running(App::new(event_loop).unwrap());
     }

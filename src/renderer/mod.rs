@@ -24,7 +24,7 @@ use winit::{
     window::Window,
 };
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     window: Arc<Window>,
     entry: ash::Entry,
     loaders: Loaders,
@@ -33,7 +33,6 @@ pub struct Renderer {
     surface: vk::SurfaceKHR,
 
     swapchain: Swapchain,
-    graphics_queue: vk::Queue,
     graphics_queue_family: u32,
 
     draw_image: Image,
@@ -43,15 +42,15 @@ pub struct Renderer {
     gradient_pipeline: vk::Pipeline,
     gradient_pipeline_layout: vk::PipelineLayout,
 
-    frames: [FrameData; Self::FRAMES_IN_FLIGHT],
+    frames: [FrameData; Renderer::FRAMES_IN_FLIGHT],
     frame_number: usize,
 
     global_descriptor_allocator: DescriptorAllocator,
 
-    deletion_queue: DeletionQueue,
+    deletion_queue: DeletionQueue<'a>,
 }
 
-impl Renderer {
+impl Renderer<'_> {
     pub const FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new(window: Arc<Window>) -> anyhow::Result<Self> {
@@ -70,9 +69,9 @@ impl Renderer {
             buffer_device_address: true,
             allocation_sizes: Default::default(),
         })?;
-        let mut rcx = RenderContext::new(instance, physical_device, device, allocator);
+        let gfx_queue = unsafe { device.get_device_queue(graphics_queue_family, 0) };
+        let mut rcx = RenderContext::new(instance, physical_device, device, allocator, gfx_queue);
         let loaders = Loaders::new(&entry, &rcx.instance, &rcx.device);
-        let graphics_queue = unsafe { rcx.device.get_device_queue(graphics_queue_family, 0) };
         let surface = unsafe {
             ash_window::create_surface(
                 &entry,
@@ -205,7 +204,6 @@ impl Renderer {
             loaders,
             surface,
             swapchain,
-            graphics_queue,
             graphics_queue_family,
             frames,
             frame_number: 0,
@@ -224,8 +222,7 @@ impl Renderer {
         &self.frames[self.frame_number % Renderer::FRAMES_IN_FLIGHT]
     }
     pub fn draw(&mut self) {
-        let get_current_frame = self.get_current_frame();
-        let frame = get_current_frame;
+        let frame = self.get_current_frame();
         let cmd_buf = frame.cmd_buf;
 
         unsafe {
@@ -325,7 +322,7 @@ impl Renderer {
         unsafe {
             self.rcx
                 .device
-                .queue_submit2(self.graphics_queue, &submit_info, frame.render_fence)
+                .queue_submit2(self.rcx.gfx_queue, &submit_info, frame.render_fence)
         }
         .unwrap();
 
@@ -333,7 +330,7 @@ impl Renderer {
         // make sure we finished all the drawing commands by waiting on the render semaphore
         self.swapchain
             .present(
-                self.graphics_queue,
+                self.rcx.gfx_queue,
                 &vk::PresentInfoKHR::default()
                     .swapchains(&[self.swapchain.swapchain])
                     .wait_semaphores(&[frame.render_sem])
@@ -403,7 +400,7 @@ fn pick_physical_device(instance: &ash::Instance) -> anyhow::Result<vk::Physical
     }
 }
 
-impl Drop for Renderer {
+impl Drop for Renderer<'_> {
     fn drop(&mut self) {
         unsafe {
             self.rcx.device.device_wait_idle().unwrap();
@@ -433,7 +430,10 @@ fn create_device(
 
     let mut features12 = vk::PhysicalDeviceVulkan12Features::default()
         .buffer_device_address(true)
-        .descriptor_indexing(true);
+        .descriptor_indexing(true)
+        // these features are required for yakui-vulkan
+        .descriptor_binding_partially_bound(true)
+        .descriptor_binding_sampled_image_update_after_bind(true);
     let mut features13 = vk::PhysicalDeviceVulkan13Features::default()
         .dynamic_rendering(true)
         .synchronization2(true);

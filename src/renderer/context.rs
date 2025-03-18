@@ -5,6 +5,7 @@ pub struct RenderContext {
     pub physical_device: vk::PhysicalDevice,
     pub device: ash::Device,
     pub allocator: Allocator,
+    pub gfx_queue: vk::Queue,
 }
 
 impl RenderContext {
@@ -13,12 +14,14 @@ impl RenderContext {
         physical_device: vk::PhysicalDevice,
         device: ash::Device,
         allocator: Allocator,
+        gfx_queue: vk::Queue,
     ) -> Self {
         Self {
             device,
             allocator,
             instance,
             physical_device,
+            gfx_queue,
         }
     }
 
