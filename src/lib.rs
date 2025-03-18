@@ -8,12 +8,12 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
-pub struct App<'a> {
+pub struct App {
     window: Arc<Window>,
-    renderer: Renderer<'a>,
+    renderer: Renderer,
 }
 
-impl App<'_> {
+impl App {
     pub fn new(event_loop: &winit::event_loop::ActiveEventLoop) -> anyhow::Result<Self> {
         let window =
             Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Zenith"))?);
@@ -48,25 +48,25 @@ impl App<'_> {
         }
     }
 }
-pub enum AppState<'a> {
+pub enum AppState {
     Initializing,
-    Running(App<'a>),
+    Running(App),
     Closing,
 }
 
-impl AppState<'_> {
+impl AppState {
     pub fn new() -> Self {
         AppState::Initializing
     }
 }
 
-impl Default for AppState<'_> {
+impl Default for AppState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ApplicationHandler for AppState<'_> {
+impl ApplicationHandler for AppState {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         *self = AppState::Running(App::new(event_loop).unwrap());
     }

@@ -15,7 +15,7 @@ pub struct Image {
 impl Image {
     pub fn new(
         rcx: &mut RenderContext,
-        deletion_queue: &mut DeletionQueue<'_>,
+        deletion_queue: &mut DeletionQueue,
         extent: vk::Extent3D,
         format: vk::Format,
         usage_flags: vk::ImageUsageFlags,

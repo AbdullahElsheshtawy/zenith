@@ -1,18 +1,18 @@
 use super::context::RenderContext;
 
-type DeletableFn<'a> = Box<dyn FnOnce(&mut RenderContext) + 'a>;
-pub struct DeletionQueue<'a> {
-    deletors: Vec<DeletableFn<'a>>,
+type DeletableFn = Box<dyn FnOnce(&mut RenderContext)>;
+pub struct DeletionQueue {
+    deletors: Vec<DeletableFn>,
 }
 
-impl<'a> DeletionQueue<'a> {
+impl DeletionQueue {
     pub fn new() -> Self {
         Self {
             deletors: Vec::new(),
         }
     }
 
-    pub fn push(&mut self, function: Box<dyn FnOnce(&mut RenderContext) + 'a>) {
+    pub fn push(&mut self, function: DeletableFn) {
         self.deletors.push(function);
     }
 

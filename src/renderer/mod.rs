@@ -24,7 +24,7 @@ use winit::{
     window::Window,
 };
 
-pub struct Renderer<'a> {
+pub struct Renderer {
     window: Arc<Window>,
     entry: ash::Entry,
     loaders: Loaders,
@@ -43,15 +43,15 @@ pub struct Renderer<'a> {
     gradient_pipeline: vk::Pipeline,
     gradient_pipeline_layout: vk::PipelineLayout,
 
-    frames: [FrameData; Renderer::FRAMES_IN_FLIGHT],
+    frames: [FrameData; Self::FRAMES_IN_FLIGHT],
     frame_number: usize,
 
     global_descriptor_allocator: DescriptorAllocator,
 
-    deletion_queue: DeletionQueue<'a>,
+    deletion_queue: DeletionQueue,
 }
 
-impl Renderer<'_> {
+impl Renderer {
     pub const FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new(window: Arc<Window>) -> anyhow::Result<Self> {
@@ -403,7 +403,7 @@ fn pick_physical_device(instance: &ash::Instance) -> anyhow::Result<vk::Physical
     }
 }
 
-impl Drop for Renderer<'_> {
+impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             self.rcx.device.device_wait_idle().unwrap();
