@@ -10,6 +10,7 @@ pub struct Swapchain {
     images: Vec<vk::Image>,
     views: Vec<vk::ImageView>,
     pub extent: vk::Extent2D,
+    pub format: vk::Format,
 }
 
 impl Swapchain {
@@ -27,10 +28,11 @@ impl Swapchain {
                 .surface
                 .get_physical_device_surface_capabilities(physical_device, surface)?
         };
+        let format = vk::Format::B8G8R8A8_UNORM;
         let mut info = vk::SwapchainCreateInfoKHR::default()
             .surface(surface)
             .min_image_count(caps.min_image_count)
-            .image_format(vk::Format::B8G8R8A8_UNORM)
+            .image_format(format)
             .image_color_space(vk::ColorSpaceKHR::SRGB_NONLINEAR)
             .image_extent(extent)
             .image_array_layers(1)
@@ -78,6 +80,7 @@ impl Swapchain {
             views,
             extent,
             loaders,
+            format,
         })
     }
 

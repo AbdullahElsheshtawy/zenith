@@ -9,3 +9,6 @@ ash = "0.38.0"
 ash-window = "0.13.0"
 gpu-allocator = {version = "0.27.0", default-features = false, features = ["vulkan"]}
 winit = "0.30.9"
+yakui = "0.3.0"
+yakui-vulkan = "0.3.0"
+yakui-winit = "0.3.0"

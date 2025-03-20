@@ -21,8 +21,9 @@ impl App<'_> {
         Ok(App { window, renderer })
     }
 
-    fn window_event(&mut self, window_event: winit::event::WindowEvent) -> bool {
+    fn window_event(&mut self, window_event: &winit::event::WindowEvent) -> bool {
         use winit::event::WindowEvent;
+        self.renderer.window_event(window_event);
         match window_event {
             WindowEvent::CloseRequested => false,
             WindowEvent::KeyboardInput {
@@ -81,7 +82,7 @@ impl ApplicationHandler for AppState<'_> {
             return;
         };
 
-        match app.window_event(event) {
+        match app.window_event(&event) {
             true => app.window.request_redraw(),
             false => {
                 *self = AppState::Closing;

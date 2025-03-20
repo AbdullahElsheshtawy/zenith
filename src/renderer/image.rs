@@ -8,7 +8,7 @@ use super::{
 pub struct Image {
     image: vk::Image,
     view: vk::ImageView,
-    extent: vk::Extent3D,
+    extent: vk::Extent2D,
     format: vk::Format,
 }
 
@@ -16,7 +16,7 @@ impl Image {
     pub fn new(
         rcx: &mut RenderContext,
         deletion_queue: &mut DeletionQueue,
-        extent: vk::Extent3D,
+        extent: vk::Extent2D,
         format: vk::Format,
         usage_flags: vk::ImageUsageFlags,
     ) -> anyhow::Result<Self> {
@@ -66,7 +66,7 @@ impl Image {
     pub fn format(&self) -> vk::Format {
         self.format
     }
-    pub fn extent(&self) -> vk::Extent3D {
+    pub fn extent(&self) -> vk::Extent2D {
         self.extent
     }
 

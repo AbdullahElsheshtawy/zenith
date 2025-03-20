@@ -6,6 +6,7 @@ mod image;
 mod loaders;
 mod swapchain;
 mod transitionable;
+mod ui;
 mod util;
 use anyhow::Context;
 use ash::vk;
@@ -16,13 +17,15 @@ use framedata::FrameData;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use image::Image;
 use loaders::Loaders;
-use std::sync::Arc;
+use std::{collections::VecDeque, f32::consts::TAU, sync::Arc};
 use swapchain::Swapchain;
 use transitionable::Transitionable;
+use ui::Ui;
 use winit::{
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     window::Window,
 };
+use yakui::{column, widgets::ColoredBox};
 
 pub struct Renderer<'a> {
     window: Arc<Window>,
@@ -47,6 +50,7 @@ pub struct Renderer<'a> {
 
     global_descriptor_allocator: DescriptorAllocator,
 
+    ui: Ui,
     deletion_queue: DeletionQueue<'a>,
 }
 
@@ -108,10 +112,9 @@ impl Renderer<'_> {
         let draw_image = Image::new(
             &mut rcx,
             &mut deletion_queue,
-            vk::Extent3D {
+            vk::Extent2D {
                 width: window_size.width,
                 height: window_size.height,
-                depth: 1,
             },
             vk::Format::R16G16B16A16_SFLOAT,
             draw_image_usage_flags,
@@ -198,6 +201,7 @@ impl Renderer<'_> {
             rcx.device.destroy_pipeline(gradient_pipeline, None);
         }));
 
+        let ui = Ui::new(&window, &rcx, draw_image.format());
         Ok(Self {
             window,
             entry,
@@ -215,6 +219,7 @@ impl Renderer<'_> {
             gradient_pipeline_layout,
             deletion_queue,
             rcx,
+            ui,
         })
     }
 
@@ -265,7 +270,39 @@ impl Renderer<'_> {
         );
 
         self.draw_background(cmd_buf);
+        self.draw_ui(cmd_buf);
 
+        let viewports = [vk::Viewport {
+            width: self.swapchain.extent.width as f32,
+            height: self.swapchain.extent.height as f32,
+            max_depth: 1.0,
+            ..Default::default()
+        }];
+        unsafe {
+            self.rcx.device.cmd_begin_rendering(
+                cmd_buf,
+                &vk::RenderingInfo::default()
+                    .render_area(vk::Rect2D {
+                        offset: Default::default(),
+                        extent: self.draw_image.extent(),
+                    })
+                    .layer_count(1)
+                    .color_attachments(&[vk::RenderingAttachmentInfo::default()
+                        .image_view(self.draw_image.view())
+                        .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .load_op(vk::AttachmentLoadOp::LOAD)
+                        .store_op(vk::AttachmentStoreOp::STORE)]),
+            );
+            self.rcx.device.cmd_set_viewport(cmd_buf, 0, &viewports);
+            self.rcx
+                .device
+                .cmd_set_scissor(cmd_buf, 0, &[self.draw_image.extent().into()]);
+        }
+        self.ui.render(&self.rcx, cmd_buf, self.draw_image.extent());
+        unsafe {
+            self.rcx.device.cmd_end_rendering(cmd_buf);
+        }
+        let frame = self.get_current_frame();
         self.draw_image.transition(
             &self.rcx,
             cmd_buf,
@@ -298,6 +335,7 @@ impl Renderer<'_> {
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::PRESENT_SRC_KHR,
         );
+
         unsafe { self.rcx.device.end_command_buffer(cmd_buf) }.unwrap();
 
         // prepare the submission
@@ -365,6 +403,16 @@ impl Renderer<'_> {
             );
         }
     }
+
+    fn draw_ui(&mut self, cmd_buf: vk::CommandBuffer) {
+        self.ui.start();
+        ui::fps_counter();
+        self.ui.finish(cmd_buf, &self.rcx);
+    }
+
+    pub fn window_event(&mut self, window_event: &winit::event::WindowEvent) {
+        self.ui.window_event(window_event);
+    }
 }
 
 fn create_instance(window: &Window, entry: &ash::Entry) -> anyhow::Result<ash::Instance> {
@@ -409,6 +457,7 @@ impl Drop for Renderer<'_> {
             });
 
             self.deletion_queue.flush(&mut self.rcx);
+            self.ui.destroy(&self.rcx);
             self.swapchain.destroy(&self.rcx.device, &self.loaders);
             self.loaders.surface.destroy_surface(self.surface, None);
 

@@ -69,13 +69,17 @@ pub fn copy_image_to_image(
 pub fn image_create_info(
     format: vk::Format,
     usage_flags: vk::ImageUsageFlags,
-    extent: vk::Extent3D,
+    extent: vk::Extent2D,
 ) -> vk::ImageCreateInfo<'static> {
     vk::ImageCreateInfo::default()
         .image_type(vk::ImageType::TYPE_2D)
         .usage(usage_flags)
         .format(format)
-        .extent(extent)
+        .extent(vk::Extent3D {
+            width: extent.width,
+            height: extent.height,
+            depth: 1,
+        })
         .array_layers(1)
         .mip_levels(1)
         .samples(vk::SampleCountFlags::TYPE_1)
