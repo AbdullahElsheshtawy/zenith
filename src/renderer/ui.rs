@@ -2,7 +2,8 @@ use std::collections::VecDeque;
 
 use ash::vk;
 use winit::window::Window;
-use yakui::{column, label, use_state};
+use yakui::widgets::Pad;
+use yakui::{Alignment, Color, use_state, widgets::Text};
 use yakui_vulkan::{Options, YakuiVulkan};
 use yakui_winit::YakuiWinit;
 
@@ -90,6 +91,9 @@ impl Ui {
     }
 }
 
+const FONT_SIZE: f32 = 16.0;
+const TEXT_COLOR: Color = Color::CORNFLOWER_BLUE;
+
 pub fn fps_counter() {
     let now = use_state(|| std::time::Instant::now());
     let new_now = std::time::Instant::now();
@@ -106,8 +110,11 @@ pub fn fps_counter() {
         window.iter().sum::<f32>() / window.len() as f32
     };
 
-    column(|| {
-        label(format!("{:.2} ms", avg * 1000.0));
-        label(format!("{:.0} FPS", 1.0 / avg));
+    let fps = 1.0 / avg;
+    let ms = avg * 1000.0;
+    yakui::align(Alignment::TOP_LEFT, || {
+        let mut text = Text::new(FONT_SIZE, format!("FPS: {fps:.0} ({ms:.2} ms)"));
+        text.style.color = TEXT_COLOR;
+        text.show();
     });
 }
