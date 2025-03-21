@@ -1,22 +1,23 @@
 #version 460
 
-// Size of workgroup
 layout(local_size_x = 16, local_size_y = 16) in;
 
-// Descriptor bindings for the pipeline
 layout(rgba16f, set = 0, binding = 0) uniform image2D image;
+
+layout(push_constant) uniform constants {
+    vec4 data1;
+    vec4 data2;
+    vec4 data3; // Unused
+    vec4 data4; // Unused
+} pc;
 
 void main() {
     ivec2 texel_coord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(image);
 
     if (texel_coord.x < size.x && texel_coord.y < size.y) {
-        vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
-
-        if (gl_LocalInvocationID.x != 0 && gl_LocalInvocationID.y != 0) {
-            color.r = float(texel_coord.x) / size.x;
-            color.g = float(texel_coord.y) / size.y;
-        }
+        float blend = float(texel_coord.x) / size.x;
+        vec4 color = mix(pc.data1, pc.data2, blend);
         imageStore(image, texel_coord, color);
     }
 }

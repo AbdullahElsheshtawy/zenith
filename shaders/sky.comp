@@ -1,0 +1,74 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba16f, set = 0, binding = 0) uniform image2D image;
+
+layout(push_constant) uniform constants {
+    vec4 data1;
+    vec4 data2;
+    vec4 data3;
+    vec4 data4;
+} PushConstants;
+
+// Return random noise [0..1]
+float noise_2d(in vec2 x) {
+    float x_hash = cos(x.x * 37.0);
+    float y_hash = cos(x.y * 57.0);
+    return fract(415.92653 * (x_hash + y_hash));
+}
+
+float noisy_star_field(in vec2 sample_pos, float threshhold) {
+    float star_val = noise_2d(sample_pos);
+    if (star_val >= threshhold) {
+        star_val = pow((star_val - threshhold) / (1.0 - threshhold), 6.0);
+    } else {
+        star_val = 0;
+    }
+
+    return star_val;
+}
+
+float stable_star_field(in vec2 sample_pos, float threshhold) {
+    float fract_x = fract(sample_pos.x);
+    float fract_y = fract(sample_pos.y);
+    vec2 floor_sample = floor(sample_pos);
+    float v1 = noisy_star_field(floor_sample, threshhold);
+    float v2 = noisy_star_field(floor_sample + vec2(0.0, 1.0), threshhold);
+    float v3 = noisy_star_field(floor_sample + vec2(1.0, 0.0), threshhold);
+    float v4 = noisy_star_field(floor_sample + vec2(1.0), threshhold);
+
+    float star_val = v1 * (1.0 - fract_x) * (1.0 - fract_y)
+            + v2 * (1.0 - fract_x) * fract_y
+            + v3 * fract_x * (1.0 - fract_y)
+            + v4 * fract_x * fract_y;
+
+    return star_val;
+}
+
+
+vec4 main_image(in vec2 frag_coord) {
+    vec2 resolution = imageSize(image);
+
+    vec3 color = PushConstants.data1.xyz * frag_coord.y / resolution.y;
+
+    float star_field_threshhold = PushConstants.data1.w;
+
+    float x_rate = 0.2;
+    float y_rate = -0.06;
+    vec2 sample_pos = frag_coord.xy + vec2(x_rate * float(1), y_rate * float(1));
+    float star_val = stable_star_field(sample_pos, star_field_threshhold);
+    color += vec3(star_val);
+
+    return vec4(color, 1.0);
+}
+
+void main() {
+    vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
+    ivec2 texel_coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(image);
+
+    if (texel_coord.x < size.x && texel_coord.y < size.y) {
+        vec4 color = main_image(texel_coord);
+        imageStore(image, texel_coord, color);
+    }
+}

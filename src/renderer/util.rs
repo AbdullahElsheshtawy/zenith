@@ -1,3 +1,4 @@
+use anyhow::Context;
 use ash::vk;
 
 use super::{context::RenderContext, image::Image};
@@ -166,4 +167,72 @@ pub fn image_subresource_range(aspect_mask: vk::ImageAspectFlags) -> vk::ImageSu
         .aspect_mask(aspect_mask)
         .level_count(vk::REMAINING_MIP_LEVELS)
         .layer_count(vk::REMAINING_ARRAY_LAYERS)
+}
+
+pub fn pick_physical_device(instance: &ash::Instance) -> anyhow::Result<vk::PhysicalDevice> {
+    unsafe {
+        let devices = instance.enumerate_physical_devices()?;
+
+        devices
+            .into_iter()
+            .max_by_key(|device| {
+                let properties = instance.get_physical_device_properties(*device);
+                match properties.device_type {
+                    vk::PhysicalDeviceType::DISCRETE_GPU => 100,
+                    vk::PhysicalDeviceType::INTEGRATED_GPU => 75,
+                    _ => 0,
+                }
+            })
+            .context("No Suitable gpu!")
+    }
+}
+
+pub fn create_device(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    queue_family_idx: u32,
+) -> anyhow::Result<ash::Device> {
+    let extensions = [vk::KHR_SWAPCHAIN_NAME.as_ptr()];
+
+    let queue_create_infos = [vk::DeviceQueueCreateInfo::default()
+        .queue_family_index(queue_family_idx)
+        .queue_priorities(&[1.0])];
+
+    let mut features12 = vk::PhysicalDeviceVulkan12Features::default()
+        .buffer_device_address(true)
+        .descriptor_indexing(true)
+        // these features are required for yakui-vulkan
+        .descriptor_binding_partially_bound(true)
+        .descriptor_binding_sampled_image_update_after_bind(true);
+    let mut features13 = vk::PhysicalDeviceVulkan13Features::default()
+        .dynamic_rendering(true)
+        .synchronization2(true);
+
+    Ok(unsafe {
+        instance.create_device(
+            physical_device,
+            &vk::DeviceCreateInfo::default()
+                .queue_create_infos(&queue_create_infos)
+                .enabled_extension_names(&extensions)
+                .push_next(&mut features12)
+                .push_next(&mut features13),
+            None,
+        )?
+    })
+}
+
+pub fn select_queue_family(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    flags: vk::QueueFlags,
+) -> anyhow::Result<u32> {
+    unsafe {
+        instance
+            .get_physical_device_queue_family_properties(physical_device)
+            .into_iter()
+            .enumerate()
+            .find(|(_, properties)| properties.queue_flags.contains(flags))
+            .map(|(idx, _)| idx as u32)
+            .context("The queue family requested does not exist")
+    }
 }

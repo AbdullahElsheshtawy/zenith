@@ -3,6 +3,7 @@ use renderer::Renderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
+    dpi::LogicalSize,
     event::{ElementState, KeyEvent},
     keyboard::PhysicalKey,
     window::{Window, WindowAttributes},
@@ -15,8 +16,14 @@ pub struct App<'a> {
 
 impl App<'_> {
     pub fn new(event_loop: &winit::event_loop::ActiveEventLoop) -> anyhow::Result<Self> {
-        let window =
-            Arc::new(event_loop.create_window(WindowAttributes::default().with_title("Zenith"))?);
+        let window = Arc::new(
+            event_loop.create_window(
+                WindowAttributes::default()
+                    .with_title("Zenith")
+                    .with_resizable(false)
+                    .with_inner_size(LogicalSize::new(1700, 900)),
+            )?,
+        );
         let renderer = Renderer::new(window.clone())?;
         Ok(App { window, renderer })
     }
