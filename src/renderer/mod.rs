@@ -200,7 +200,7 @@ impl Renderer<'_> {
             rcx.device.destroy_pipeline(gradient_pipeline, None);
         }));
 
-        let ui = Ui::new(&window, &rcx, draw_image.format());
+        let ui = Ui::new(&window, &rcx, swapchain.format);
         Ok(Self {
             window,
             entry,
@@ -259,7 +259,14 @@ impl Renderer<'_> {
                 .unwrap()
         };
 
-        let swapchain_image = self.swapchain.get_image(swapchain_image_index);
+        let swapchain_image = Image::from_handle(
+            &self.rcx,
+            &mut self.deletion_queue,
+            self.swapchain.get_image(swapchain_image_index),
+            self.swapchain.format,
+            self.swapchain.extent,
+        )
+        .unwrap();
 
         self.draw_image.transition(
             &self.rcx,
@@ -269,39 +276,7 @@ impl Renderer<'_> {
         );
 
         self.draw_background(cmd_buf);
-        self.draw_ui(cmd_buf);
 
-        let viewports = [vk::Viewport {
-            width: self.swapchain.extent.width as f32,
-            height: self.swapchain.extent.height as f32,
-            max_depth: 1.0,
-            ..Default::default()
-        }];
-        unsafe {
-            self.rcx.device.cmd_begin_rendering(
-                cmd_buf,
-                &vk::RenderingInfo::default()
-                    .render_area(vk::Rect2D {
-                        offset: Default::default(),
-                        extent: self.draw_image.extent(),
-                    })
-                    .layer_count(1)
-                    .color_attachments(&[vk::RenderingAttachmentInfo::default()
-                        .image_view(self.draw_image.view())
-                        .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                        .load_op(vk::AttachmentLoadOp::LOAD)
-                        .store_op(vk::AttachmentStoreOp::STORE)]),
-            );
-            self.rcx.device.cmd_set_viewport(cmd_buf, 0, &viewports);
-            self.rcx
-                .device
-                .cmd_set_scissor(cmd_buf, 0, &[self.draw_image.extent().into()]);
-        }
-        self.ui.render(&self.rcx, cmd_buf, self.draw_image.extent());
-        unsafe {
-            self.rcx.device.cmd_end_rendering(cmd_buf);
-        }
-        let frame = self.get_current_frame();
         self.draw_image.transition(
             &self.rcx,
             cmd_buf,
@@ -319,8 +294,8 @@ impl Renderer<'_> {
         util::copy_image_to_image(
             &self.rcx,
             cmd_buf,
-            self.draw_image.image(),
-            swapchain_image,
+            &self.draw_image,
+            &swapchain_image,
             vk::Extent2D {
                 width: self.draw_image.extent().width,
                 height: self.draw_image.extent().height,
@@ -334,7 +309,9 @@ impl Renderer<'_> {
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::PRESENT_SRC_KHR,
         );
+        self.draw_ui(cmd_buf, &swapchain_image);
 
+        let frame = self.get_current_frame();
         unsafe { self.rcx.device.end_command_buffer(cmd_buf) }.unwrap();
 
         // prepare the submission
@@ -403,10 +380,40 @@ impl Renderer<'_> {
         }
     }
 
-    fn draw_ui(&mut self, cmd_buf: vk::CommandBuffer) {
+    fn draw_ui(&mut self, cmd_buf: vk::CommandBuffer, image: &Image) {
         self.ui.start();
         ui::fps_counter();
         self.ui.finish(cmd_buf, &self.rcx);
+        let viewports = [vk::Viewport {
+            width: image.extent().width as f32,
+            height: image.extent().height as f32,
+            max_depth: 1.0,
+            ..Default::default()
+        }];
+        unsafe {
+            self.rcx.device.cmd_begin_rendering(
+                cmd_buf,
+                &vk::RenderingInfo::default()
+                    .render_area(vk::Rect2D {
+                        offset: Default::default(),
+                        extent: image.extent(),
+                    })
+                    .layer_count(1)
+                    .color_attachments(&[vk::RenderingAttachmentInfo::default()
+                        .image_view(image.view())
+                        .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .load_op(vk::AttachmentLoadOp::LOAD)
+                        .store_op(vk::AttachmentStoreOp::STORE)]),
+            );
+            self.rcx.device.cmd_set_viewport(cmd_buf, 0, &viewports);
+            self.rcx
+                .device
+                .cmd_set_scissor(cmd_buf, 0, &[image.extent().into()]);
+        }
+        self.ui.render(&self.rcx, cmd_buf, image.extent());
+        unsafe {
+            self.rcx.device.cmd_end_rendering(cmd_buf);
+        }
     }
 
     pub fn window_event(&mut self, window_event: &winit::event::WindowEvent) {

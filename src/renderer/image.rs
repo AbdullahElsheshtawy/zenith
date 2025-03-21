@@ -73,6 +73,31 @@ impl Image {
     pub fn image(&self) -> vk::Image {
         self.image
     }
+
+    // # Safety: The `Image` is not added to the deletion queue only the view will be added. The image is the callers responibility.
+    pub fn from_handle(
+        rcx: &RenderContext,
+        deletion_queue: &mut DeletionQueue,
+        image: vk::Image,
+        format: vk::Format,
+        extent: vk::Extent2D,
+    ) -> anyhow::Result<Self> {
+        let view = unsafe {
+            rcx.device.create_image_view(
+                &util::image_view_create_info(format, image, vk::ImageAspectFlags::COLOR),
+                None,
+            )
+        }?;
+        deletion_queue.push(Box::new(move |rcx| unsafe {
+            rcx.device.destroy_image_view(view, None);
+        }));
+        Ok(Self {
+            image,
+            view,
+            extent,
+            format,
+        })
+    }
 }
 
 impl Transitionable for Image {

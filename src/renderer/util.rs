@@ -2,7 +2,7 @@ use std::io::{Read, Seek};
 
 use ash::vk;
 
-use super::context::RenderContext;
+use super::{context::RenderContext, image::Image};
 
 pub fn load_shader_module(
     file_path: &str,
@@ -23,8 +23,8 @@ pub fn load_shader_module(
 pub fn copy_image_to_image(
     rcx: &RenderContext,
     cmd_buf: vk::CommandBuffer,
-    src: vk::Image,
-    dst: vk::Image,
+    src: &Image,
+    dst: &Image,
     src_size: vk::Extent2D,
     dst_size: vk::Extent2D,
 ) {
@@ -57,9 +57,9 @@ pub fn copy_image_to_image(
         )];
 
     let blit_info = vk::BlitImageInfo2::default()
-        .src_image(src)
+        .src_image(src.image())
         .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-        .dst_image(dst)
+        .dst_image(dst.image())
         .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
         .filter(vk::Filter::LINEAR)
         .regions(&blit_region);
