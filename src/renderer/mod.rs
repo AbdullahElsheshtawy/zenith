@@ -17,7 +17,7 @@ use framedata::FrameData;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use image::Image;
 use loaders::Loaders;
-use std::{collections::VecDeque, f32::consts::TAU, sync::Arc};
+use std::sync::Arc;
 use swapchain::Swapchain;
 use transitionable::Transitionable;
 use ui::Ui;
@@ -25,7 +25,6 @@ use winit::{
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
     window::Window,
 };
-use yakui::{column, widgets::ColoredBox};
 
 pub struct Renderer<'a> {
     window: Arc<Window>,

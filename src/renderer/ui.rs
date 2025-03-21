@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 
 use ash::vk;
 use winit::window::Window;
-use yakui::widgets::Pad;
 use yakui::{Alignment, Color, use_state, widgets::Text};
 use yakui_vulkan::{Options, YakuiVulkan};
 use yakui_winit::YakuiWinit;
@@ -26,7 +25,7 @@ impl Ui {
             Default::default(),
             [window_size.width as f32, window_size.height as f32].into(),
         ));
-        let winit = YakuiWinit::new(&window);
+        let winit = YakuiWinit::new(window);
         let memory_props = unsafe {
             rcx.instance
                 .get_physical_device_memory_properties(rcx.physical_device)
@@ -64,7 +63,7 @@ impl Ui {
             yakui_vulkan::VulkanContext::new(&rcx.device, rcx.gfx_queue, self.memory_props);
 
         unsafe { self.renderer.transfers_finished(&yak_vk_ctx) };
-        unsafe { self.renderer.transfer(&paint, &yak_vk_ctx, cmd_buf) };
+        unsafe { self.renderer.transfer(paint, &yak_vk_ctx, cmd_buf) };
         self.renderer.transfers_submitted();
     }
 
@@ -78,7 +77,7 @@ impl Ui {
         let yak_vk_ctx =
             yakui_vulkan::VulkanContext::new(&rcx.device, rcx.gfx_queue, self.memory_props);
         unsafe {
-            self.renderer.paint(&paint, &yak_vk_ctx, cmd_buf, extent);
+            self.renderer.paint(paint, &yak_vk_ctx, cmd_buf, extent);
         }
     }
 
@@ -91,11 +90,10 @@ impl Ui {
     }
 }
 
-const FONT_SIZE: f32 = 16.0;
 const TEXT_COLOR: Color = Color::CORNFLOWER_BLUE;
 
 pub fn fps_counter() {
-    let now = use_state(|| std::time::Instant::now());
+    let now = use_state(std::time::Instant::now);
     let new_now = std::time::Instant::now();
     let delta = new_now - now.get();
     now.set(new_now);
@@ -113,7 +111,7 @@ pub fn fps_counter() {
     let fps = 1.0 / avg;
     let ms = avg * 1000.0;
     yakui::align(Alignment::TOP_LEFT, || {
-        let mut text = Text::new(FONT_SIZE, format!("FPS: {fps:.0} ({ms:.2} ms)"));
+        let mut text = Text::label(format!("FPS: {fps:.0} ({ms:.2} ms)").into());
         text.style.color = TEXT_COLOR;
         text.show();
     });
