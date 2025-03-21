@@ -1,8 +1,44 @@
-use std::io::{Read, Seek};
-
 use ash::vk;
 
 use super::{context::RenderContext, image::Image};
+
+pub fn rendering_attachment_info(
+    image: &Image,
+    clear: Option<vk::ClearValue>,
+    layout: vk::ImageLayout,
+) -> vk::RenderingAttachmentInfo<'static> {
+    let mut info = vk::RenderingAttachmentInfo::default()
+        .image_view(image.view())
+        .image_layout(layout)
+        .load_op(if clear.is_some() {
+            vk::AttachmentLoadOp::CLEAR
+        } else {
+            vk::AttachmentLoadOp::LOAD
+        })
+        .store_op(vk::AttachmentStoreOp::STORE);
+    if let Some(clear) = clear {
+        info = info.clear_value(clear);
+    }
+    info
+}
+
+pub fn rendering_info<'a>(
+    render_extent: vk::Extent2D,
+    color_attachment_info: &'a [vk::RenderingAttachmentInfo<'a>],
+    depth_attachment_info: Option<&'a vk::RenderingAttachmentInfo>,
+) -> vk::RenderingInfo<'a> {
+    let mut info = vk::RenderingInfo::default()
+        .render_area(vk::Rect2D {
+            offset: Default::default(),
+            extent: render_extent,
+        })
+        .layer_count(1)
+        .color_attachments(color_attachment_info);
+    if let Some(depth_info) = depth_attachment_info {
+        info = info.depth_attachment(depth_info);
+    }
+    info
+}
 
 pub fn load_shader_module(
     file_path: &str,
@@ -10,11 +46,7 @@ pub fn load_shader_module(
 ) -> anyhow::Result<vk::ShaderModule> {
     let mut file = std::fs::File::open(file_path)?;
 
-    let size = file.seek(std::io::SeekFrom::End(0))? as usize;
-    file.seek(std::io::SeekFrom::Start(0))?;
-    let mut code = vec![0u32; size / std::mem::size_of::<u32>()];
-
-    file.read_exact(unsafe { std::slice::from_raw_parts_mut(code.as_mut_ptr().cast(), size) })?;
+    let code = ash::util::read_spv(&mut file)?;
 
     Ok(unsafe {
         device.create_shader_module(&vk::ShaderModuleCreateInfo::default().code(&code), None)

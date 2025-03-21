@@ -393,17 +393,15 @@ impl Renderer<'_> {
         unsafe {
             self.rcx.device.cmd_begin_rendering(
                 cmd_buf,
-                &vk::RenderingInfo::default()
-                    .render_area(vk::Rect2D {
-                        offset: Default::default(),
-                        extent: image.extent(),
-                    })
-                    .layer_count(1)
-                    .color_attachments(&[vk::RenderingAttachmentInfo::default()
-                        .image_view(image.view())
-                        .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                        .load_op(vk::AttachmentLoadOp::LOAD)
-                        .store_op(vk::AttachmentStoreOp::STORE)]),
+                &util::rendering_info(
+                    image.extent(),
+                    &[util::rendering_attachment_info(
+                        image,
+                        None,
+                        vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    )],
+                    None,
+                ),
             );
             self.rcx.device.cmd_set_viewport(cmd_buf, 0, &viewports);
             self.rcx
