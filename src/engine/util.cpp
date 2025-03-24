@@ -1,0 +1,125 @@
+#include "util.hpp"
+
+VkCommandPoolCreateInfo
+util::commandPoolCreateInfo(uint32_t queueFamilyIdx,
+                            VkCommandPoolCreateFlags flags) {
+  return VkCommandPoolCreateInfo{.sType =
+                                     VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                                 .pNext = nullptr,
+                                 .flags = flags,
+                                 .queueFamilyIndex = queueFamilyIdx};
+}
+
+VkCommandBufferAllocateInfo
+util::commandBufferAllocateInfo(VkCommandPool commandPool, uint32_t count) {
+  return VkCommandBufferAllocateInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .pNext = nullptr,
+      .commandPool = commandPool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = count,
+  };
+}
+
+VkFenceCreateInfo util::fenceCreateInfo(VkFenceCreateFlags flags) {
+  return VkFenceCreateInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                           .pNext = nullptr,
+                           .flags = flags};
+}
+
+VkSemaphoreCreateInfo util::semaphoreCreateInfo(VkSemaphoreCreateFlags flags) {
+  return VkSemaphoreCreateInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                               .pNext = nullptr,
+                               .flags = flags};
+}
+
+VkCommandBufferBeginInfo
+util::commandBufferBeginInfo(VkCommandBufferUsageFlags flags) {
+  return VkCommandBufferBeginInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+      .flags = flags,
+      .pInheritanceInfo = nullptr,
+  };
+}
+
+void util::transitionImage(VkCommandBuffer cmd, VkImage image,
+                           VkImageLayout currentLayout,
+                           VkImageLayout newLayout) {
+  const VkImageAspectFlags aspectMask =
+      newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+          ? VK_IMAGE_ASPECT_DEPTH_BIT
+          : VK_IMAGE_ASPECT_COLOR_BIT;
+
+  VkImageMemoryBarrier2 imageBarrier{};
+  imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  imageBarrier.pNext = nullptr;
+
+  imageBarrier.image = image;
+  imageBarrier.subresourceRange = util::imageSubresourceRange(aspectMask);
+
+  imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+
+  imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  imageBarrier.dstAccessMask =
+      VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+
+  imageBarrier.oldLayout = currentLayout;
+  imageBarrier.newLayout = newLayout;
+
+  VkDependencyInfo depInfo{};
+  depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  depInfo.pNext = nullptr;
+  depInfo.imageMemoryBarrierCount = 1;
+  depInfo.pImageMemoryBarriers = &imageBarrier;
+
+  vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
+VkImageSubresourceRange
+util::imageSubresourceRange(VkImageAspectFlags aspectMask) {
+  return VkImageSubresourceRange{
+      .aspectMask = aspectMask,
+      .baseMipLevel = 0,
+      .levelCount = VK_REMAINING_MIP_LEVELS,
+      .baseArrayLayer = 0,
+      .layerCount = VK_REMAINING_ARRAY_LAYERS,
+  };
+}
+
+VkSemaphoreSubmitInfo util::semaphoreSubmitInfo(VkPipelineStageFlags2 stageMask,
+                                                VkSemaphore semaphore) {
+  return VkSemaphoreSubmitInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .pNext = nullptr,
+      .semaphore = semaphore,
+      .value = 1,
+      .stageMask = stageMask,
+      .deviceIndex = 0,
+  };
+}
+
+VkCommandBufferSubmitInfo util::commandBufferSubmitInfo(VkCommandBuffer cmd) {
+  return VkCommandBufferSubmitInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+      .pNext = nullptr,
+      .commandBuffer = cmd,
+      .deviceMask = 0,
+  };
+}
+
+VkSubmitInfo2 util::submitInfo(const VkCommandBufferSubmitInfo *cmd,
+                               const VkSemaphoreSubmitInfo *signalSemaphoreInfo,
+                               const VkSemaphoreSubmitInfo *waitSemaphoreInfo) {
+  return VkSubmitInfo2{
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+      .pNext = nullptr,
+      .waitSemaphoreInfoCount = waitSemaphoreInfo == nullptr ? 0u : 1u,
+      .pWaitSemaphoreInfos = waitSemaphoreInfo,
+      .commandBufferInfoCount = 1,
+      .pCommandBufferInfos = cmd,
+      .signalSemaphoreInfoCount = signalSemaphoreInfo == nullptr ? 0u : 1u,
+      .pSignalSemaphoreInfos = signalSemaphoreInfo,
+  };
+}
