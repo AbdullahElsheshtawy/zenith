@@ -1,4 +1,5 @@
 #include "util.hpp"
+#include "fstream"
 
 VkCommandPoolCreateInfo
 util::commandPoolCreateInfo(uint32_t queueFamilyIdx,
@@ -122,4 +123,112 @@ VkSubmitInfo2 util::submitInfo(const VkCommandBufferSubmitInfo *cmd,
       .signalSemaphoreInfoCount = signalSemaphoreInfo == nullptr ? 0u : 1u,
       .pSignalSemaphoreInfos = signalSemaphoreInfo,
   };
+}
+
+std::optional<VkShaderModule>
+util::loadShaderModule(VkDevice device, const std::string_view path) {
+
+  std::ifstream file(path.data(), std::ios::ate, std::ios::binary);
+
+  if (!file.is_open()) {
+    return std::nullopt;
+  }
+
+  const size_t fileSize = file.tellg();
+  std::vector<uint32_t> code(fileSize / sizeof(uint32_t));
+
+  file.seekg(0);
+  file.read(reinterpret_cast<char *>(code.data()), fileSize);
+
+  const VkShaderModuleCreateInfo info{
+      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+      .pNext = nullptr,
+      .codeSize = code.size(),
+      .pCode = code.data(),
+  };
+  VkShaderModule shaderModule{};
+
+  return vkCreateShaderModule(device, &info, nullptr, &shaderModule) !=
+                 VK_SUCCESS
+             ? std::nullopt
+             : std::make_optional(shaderModule);
+}
+
+VkImageCreateInfo util::imageCreateInfo(VkFormat format,
+                                        VkImageUsageFlags usageFlags,
+                                        VkExtent3D extent) {
+  return VkImageCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = nullptr,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = format,
+      .extent = extent,
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .tiling = VK_IMAGE_TILING_OPTIMAL,
+      .usage = usageFlags,
+  };
+}
+
+VkImageViewCreateInfo
+util::imageViewCreateInfo(VkFormat format, VkImage image,
+                          VkImageAspectFlags aspectFlags) {
+  return VkImageViewCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = nullptr,
+      .image = image,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = format,
+      .subresourceRange = {.aspectMask = aspectFlags,
+                           .baseMipLevel = 0,
+                           .levelCount = 1,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1},
+  };
+}
+
+void util::copyImageToImage(VkCommandBuffer cmd, VkImage src, VkImage dst,
+                            VkExtent2D srcSize, VkExtent2D dstSize) {
+  VkImageBlit2 blitRegion{};
+  blitRegion.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
+  blitRegion.pNext = nullptr;
+
+  blitRegion.srcOffsets[1] = {.x = static_cast<int>(srcSize.width),
+                              .y = static_cast<int>(srcSize.height),
+                              .z = 1};
+
+  blitRegion.dstOffsets[1] = {.x = static_cast<int>(dstSize.width),
+                              .y = static_cast<int>(dstSize.height),
+                              .z = 1};
+
+  blitRegion.srcSubresource = {
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .mipLevel = 0,
+      .baseArrayLayer = 0,
+      .layerCount = 1,
+  };
+
+  blitRegion.dstSubresource = {
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .mipLevel = 0,
+      .baseArrayLayer = 0,
+      .layerCount = 1,
+  };
+
+  VkBlitImageInfo2 blitInfo{};
+  blitInfo.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2;
+  blitInfo.pNext = nullptr;
+
+  blitInfo.srcImage = src;
+  blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+  blitInfo.dstImage = dst;
+  blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+  blitInfo.filter = VK_FILTER_LINEAR;
+  blitInfo.regionCount = 1;
+  blitInfo.pRegions = &blitRegion;
+
+  vkCmdBlitImage2(cmd, &blitInfo);
 }

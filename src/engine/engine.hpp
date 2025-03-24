@@ -1,5 +1,6 @@
 #pragma once
 #include "SDL3/SDL.h"
+#include "deletion_queue.hpp"
 #include "types.hpp"
 #include <array>
 
@@ -11,6 +12,8 @@ struct FrameData {
 
   VkCommandPool commandPool;
   VkCommandBuffer commandBuffer;
+
+  DeletionQueue deletionQueue;
 };
 
 struct Swapchain {
@@ -23,7 +26,7 @@ struct Swapchain {
 
 class Engine {
 public:
-  Engine();
+  Engine(uint32_t width, uint32_t height);
   ~Engine();
   void run();
 
@@ -39,6 +42,10 @@ private:
   std::array<FrameData, FRAMES_IN_FLIGHT> FrameData_;
   size_t FrameNumber_{};
   VkExtent2D WindowExtent_;
+  VmaAllocator Allocator_;
+  DeletionQueue DeletionQueue_;
+  Image DrawImage_;
+  VkExtent2D DrawExtent_;
 
 private:
   void CreateSwapchain();
@@ -49,4 +56,5 @@ private:
   };
 
   void draw();
+  void drawBackground(VkCommandBuffer cmd) const;
 };

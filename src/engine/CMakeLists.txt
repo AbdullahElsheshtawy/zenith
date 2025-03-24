@@ -6,6 +6,8 @@ target_sources(engine PRIVATE
 	"engine.cpp"
 	"util.hpp"
 	"util.cpp"
+	"deletion_queue.hpp"
+	"deletion_queue.cpp"
 )
 
 if(MSVC)
