@@ -1,6 +1,9 @@
 #pragma once
 #include "SDL3/SDL.h"
 #include "deletion_queue.hpp"
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
 #include "types.hpp"
 #include <array>
 
@@ -22,6 +25,12 @@ struct Swapchain {
   VkFormat format;
   std::vector<VkImage> images;
   std::vector<VkImageView> views;
+};
+
+struct Immediate {
+  VkFence fence;
+  VkCommandBuffer commandBuffer;
+  VkCommandPool commandPool;
 };
 
 class Engine {
@@ -46,15 +55,20 @@ private:
   DeletionQueue DeletionQueue_;
   Image DrawImage_;
   VkExtent2D DrawExtent_;
+  Immediate Immediate_;
 
 private:
   void CreateSwapchain();
   void DestroySwapchain();
-  void InitializeFrameData();
+  void InitializeCommands();
+  void InitializeImgui();
   FrameData &GetCurrentFrame() {
     return FrameData_[FrameNumber_ % FRAMES_IN_FLIGHT];
   };
 
-  void draw();
-  void drawBackground(VkCommandBuffer cmd) const;
+  void Draw();
+  void DrawBackground(VkCommandBuffer cmd) const;
+  void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const;
+  void
+  ImmediateSubmit(std::function<void(VkCommandBuffer cmd)> &&function) const;
 };

@@ -232,3 +232,36 @@ void util::copyImageToImage(VkCommandBuffer cmd, VkImage src, VkImage dst,
 
   vkCmdBlitImage2(cmd, &blitInfo);
 }
+
+VkRenderingAttachmentInfo util::attachementInfo(const VkImageView view,
+                                                const VkClearValue *clear,
+                                                const VkImageLayout layout) {
+  VkRenderingAttachmentInfo colorAttachment = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .pNext = nullptr,
+      .imageView = view,
+      .imageLayout = layout,
+      .loadOp =
+          clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+  };
+
+  if (clear) {
+    colorAttachment.clearValue = *clear;
+  }
+  return colorAttachment;
+}
+
+VkRenderingInfo
+util::renderingInfo(const VkExtent2D renderExtent,
+                    const VkRenderingAttachmentInfo *colorAttachemnt,
+                    const VkRenderingAttachmentInfo *depthAttachment) {
+  return VkRenderingInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                         .pNext = nullptr,
+                         .renderArea = VkRect2D{VkOffset2D{0, 0}, renderExtent},
+                         .layerCount = 1,
+                         .colorAttachmentCount = 1,
+                         .pColorAttachments = colorAttachemnt,
+                         .pDepthAttachment = depthAttachment,
+                         .pStencilAttachment = nullptr};
+}

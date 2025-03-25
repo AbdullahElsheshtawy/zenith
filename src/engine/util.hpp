@@ -41,4 +41,12 @@ VkImageViewCreateInfo imageViewCreateInfo(VkFormat format, VkImage image,
 
 void copyImageToImage(VkCommandBuffer cmd, VkImage src, VkImage dst,
                       VkExtent2D srcSize, VkExtent2D dstSize);
+
+VkRenderingAttachmentInfo attachementInfo(
+    const VkImageView view, const VkClearValue *clear,
+    VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+VkRenderingInfo renderingInfo(const VkExtent2D renderExtent,
+                              const VkRenderingAttachmentInfo *colorAttachemnt,
+                              const VkRenderingAttachmentInfo *depthAttachment);
 } // namespace util

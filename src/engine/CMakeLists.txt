@@ -1,20 +1,17 @@
 add_library(engine)
 
 target_sources(engine PRIVATE
-	"types.hpp"	
-	"engine.hpp"
-	"engine.cpp"
-	"util.hpp"
-	"util.cpp"
-	"deletion_queue.hpp"
-	"deletion_queue.cpp"
+    "types.hpp"	
+    "engine.hpp"
+    "engine.cpp"
+    "util.hpp"
+    "util.cpp"
+    "deletion_queue.hpp"
+    "deletion_queue.cpp"
+    "descriptors.hpp"
+    "descriptors.cpp"
 )
 
-if(MSVC)
-	target_compile_options(engine PRIVATE /W4)
-else()
-	target_compile_options(engine PRIVATE -Wall -Wextra)
-endif()
 
 add_dependencies(engine Shaders)
 
@@ -23,5 +20,10 @@ add_dependencies(engine Shaders)
 target_compile_definitions(engine PUBLIC VK_NO_PROTOTYPES=1)
 
 find_package(Vulkan REQUIRED)
-target_include_directories(engine PRIVATE ${VULKAN_INCLUDE_DIRS})
-target_link_libraries(engine PUBLIC Vulkan::Headers SDL3::SDL3 vk-bootstrap::vk-bootstrap volk::volk GPUOpen::VulkanMemoryAllocator glm::glm spdlog::spdlog)
+target_link_libraries(engine PUBLIC Vulkan::Headers SDL3::SDL3 vk-bootstrap::vk-bootstrap volk::volk Vma glm::glm spdlog::spdlog imgui)
+
+if(ZENITH_DEV)
+target_compile_options(zenith PRIVATE -Wall -Wextra -Werror)
+else()
+target_compile_options(zenith PRIVATE -Wall -Wextra)
+endif()
