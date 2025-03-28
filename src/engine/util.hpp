@@ -30,8 +30,8 @@ VkSubmitInfo2 submitInfo(const VkCommandBufferSubmitInfo *cmd,
                          const VkSemaphoreSubmitInfo *signalSemaphoreInfo,
                          const VkSemaphoreSubmitInfo *waitSemaphoreInfo);
 
-std::optional<VkShaderModule> loadShaderModule(VkDevice device,
-                                               const std::string_view path);
+bool load_shader_module(const char *filePath, VkDevice device,
+                                VkShaderModule *outShaderModule);
 
 VkImageCreateInfo imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags,
                                   VkExtent3D extent);

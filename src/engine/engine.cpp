@@ -4,6 +4,7 @@
 #include "VkBootstrap.h"
 #include "util.hpp"
 #include "vma.hpp"
+#include <optional>
 
 Engine::Engine(uint32_t width, uint32_t height) : WindowExtent_{width, height} {
   SDL_Init(SDL_INIT_VIDEO);
@@ -110,6 +111,8 @@ Engine::Engine(uint32_t width, uint32_t height) : WindowExtent_{width, height} {
   });
 
   InitializeImgui();
+  InitializeDescriptors();
+  InitializePipelines();
 }
 
 void Engine::run() {
@@ -142,7 +145,23 @@ void Engine::run() {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::ShowDemoWindow();
+    if (ImGui::Begin("Background")) {
+      ComputeEffect &selected = BackgroundEffects_[CurrentBackgroundEffect_];
+      ImGui::Text("Selected Effect: ", selected.name);
+
+      ImGui::SliderInt("Effect Index", &CurrentBackgroundEffect_, 0,
+                       BackgroundEffects_.size() - 1);
+
+      ImGui::SliderFloat4(
+          "data1", reinterpret_cast<float *>(&selected.data.data1), 0.0, 1.0);
+      ImGui::SliderFloat4(
+          "data2", reinterpret_cast<float *>(&selected.data.data2), 0.0, 1.0);
+      ImGui::SliderFloat4(
+          "data3", reinterpret_cast<float *>(&selected.data.data3), 0.0, 1.0);
+      ImGui::SliderFloat4(
+          "data4", reinterpret_cast<float *>(&selected.data.data4), 0.0, 1.0);
+    }
+    ImGui::End();
     ImGui::Render();
 
     Draw();
@@ -234,6 +253,124 @@ void Engine::InitializeCommands() {
   DeletionQueue_.Push([&]() {
     vkDestroyCommandPool(Device_, Immediate_.commandPool, nullptr);
     vkDestroyFence(Device_, Immediate_.fence, nullptr);
+  });
+}
+
+void Engine::InitializeDescriptors() {
+  std::vector<DescriptorAllocator::PoolSizeRatio> sizes = {
+      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+  };
+
+  GlobalDescriptorAllocator_.initializePool(Device_, 10, sizes);
+
+  {
+    DescriptorLayoutBuilder builder;
+    builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    DrawImageDescriptorLayout_ =
+        builder.build(Device_, VK_SHADER_STAGE_COMPUTE_BIT);
+  }
+  DrawImageDescriptors_ =
+      GlobalDescriptorAllocator_.allocate(Device_, DrawImageDescriptorLayout_);
+
+  const VkDescriptorImageInfo imageInfo{
+      .imageView = DrawImage_.view,
+      .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+  };
+  const VkWriteDescriptorSet drawImageWrite{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .pNext = nullptr,
+      .dstSet = DrawImageDescriptors_,
+      .dstBinding = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+      .pImageInfo = &imageInfo,
+  };
+  vkUpdateDescriptorSets(Device_, 1, &drawImageWrite, 0, nullptr);
+
+  DeletionQueue_.Push([&]() {
+    GlobalDescriptorAllocator_.destroyPool(Device_);
+    vkDestroyDescriptorSetLayout(Device_, DrawImageDescriptorLayout_, nullptr);
+  });
+}
+
+void Engine::InitializePipelines() {
+
+  VkPipelineLayout computeLayout;
+  const VkPushConstantRange pushConstants{
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+      .offset = 0,
+      .size = sizeof(ComputePushConstants),
+  };
+  const VkPipelineLayoutCreateInfo computeLayoutInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .pNext = nullptr,
+      .setLayoutCount = 1,
+      .pSetLayouts = &DrawImageDescriptorLayout_,
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &pushConstants,
+  };
+
+  VK_CHECK(vkCreatePipelineLayout(Device_, &computeLayoutInfo, nullptr,
+                                  &computeLayout));
+
+  // Gradient Color Shader
+  ComputeEffect gradient{
+      .name = "Gradient",
+      .layout = computeLayout,
+      .data =
+          {
+              .data1 = glm::vec4(1, 0, 0, 1),
+              .data2 = glm::vec4(0, 0, 1, 1),
+          },
+  };
+  VkShaderModule gradientShader;
+  VkShaderModule skyShader;
+  if (!util::load_shader_module("../shaders/gradient_color.spv", Device_,
+                                &gradientShader) ||
+      !util::load_shader_module("../shaders/sky.spv", Device_, &skyShader)) {
+    spdlog::error("Failed to build the compute shader\\s");
+  }
+
+  const VkPipelineShaderStageCreateInfo stageInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .pNext = nullptr,
+      .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+      .module = gradientShader,
+      .pName = "main",
+  };
+
+  VkComputePipelineCreateInfo computePipelineCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      .pNext = nullptr,
+      .stage = stageInfo,
+      .layout = computeLayout,
+  };
+
+  VK_CHECK(vkCreateComputePipelines(Device_, VK_NULL_HANDLE, 1,
+                                    &computePipelineCreateInfo, nullptr,
+                                    &gradient.pipeline));
+
+  computePipelineCreateInfo.stage.module = skyShader;
+  ComputeEffect sky{
+      .name = "sky",
+      .layout = computeLayout,
+      .data =
+          {
+              .data1 = glm::vec4(0.1, 0.2, 0.4, 0.97),
+          },
+  };
+  VK_CHECK(vkCreateComputePipelines(Device_, VK_NULL_HANDLE, 1,
+                                    &computePipelineCreateInfo, nullptr,
+                                    &sky.pipeline));
+  BackgroundEffects_.push_back(gradient);
+  BackgroundEffects_.push_back(sky);
+
+  vkDestroyShaderModule(Device_, gradientShader, nullptr);
+  vkDestroyShaderModule(Device_, skyShader, nullptr);
+  DeletionQueue_.Push([=, this]() {
+    vkDestroyPipelineLayout(Device_, computeLayout, nullptr);
+    vkDestroyPipeline(Device_, gradient.pipeline, nullptr);
+    vkDestroyPipeline(Device_, sky.pipeline, nullptr);
   });
 }
 
@@ -364,15 +501,16 @@ void Engine::Draw() {
 }
 
 void Engine::DrawBackground(VkCommandBuffer cmd) const {
-  const VkClearColorValue clearColor = {.float32{
-      0.0, 0.0, std::abs(std::sin(static_cast<float>(FrameNumber_) / 120.0f)),
-      1.0}};
+  ComputeEffect selected = BackgroundEffects_[CurrentBackgroundEffect_];
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, selected.pipeline);
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, selected.layout,
+                          0, 1, &DrawImageDescriptors_, 0, nullptr);
 
-  const auto clearRange =
-      util::imageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
+  vkCmdPushConstants(cmd, selected.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                     sizeof(ComputePushConstants), &selected.data);
 
-  vkCmdClearColorImage(cmd, DrawImage_.handle, VK_IMAGE_LAYOUT_GENERAL,
-                       &clearColor, 1, &clearRange);
+  vkCmdDispatch(cmd, std::ceil(DrawExtent_.width / 16.0),
+                std::ceil(DrawExtent_.height / 16.0), 1);
 }
 
 void Engine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const {

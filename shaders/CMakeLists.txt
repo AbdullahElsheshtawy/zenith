@@ -4,8 +4,9 @@ if(NOT SLANGC)
 	message(FATAL_ERROR "Could not find slangc compiler")
 endif()
 
-file(GLOB_RECURSE shader_files
-	"${CMAKE_CURRENT_SOURCE_DIR}/*.slang"
+set(shader_files
+	"${CMAKE_CURRENT_SOURCE_DIR}/gradient_color.slang"
+	"${CMAKE_CURRENT_SOURCE_DIR}/sky.slang"
 )
 
 add_custom_target(Shaders ALL)
@@ -15,7 +16,8 @@ foreach(shader ${shader_files})
 
 	add_custom_command(
 		TARGET Shaders
-		COMMAND "${SLANGC} -o ${CMAKE_CURRENT_SOURCE_DIR}/${shader_name}.spv ${shader}"
+		COMMAND ${SLANGC}
+		ARGS -o ${CMAKE_CURRENT_BINARY_DIR}/${shader_name}.spv ${shader}
 		DEPENDS ${shader}
 		COMMENT "Compiling shader: ${shader_name}"
 	)

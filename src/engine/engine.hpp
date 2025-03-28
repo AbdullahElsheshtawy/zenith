@@ -1,6 +1,8 @@
 #pragma once
 #include "SDL3/SDL.h"
 #include "deletion_queue.hpp"
+#include "descriptors.hpp"
+#include "glm/vec4.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
@@ -33,6 +35,19 @@ struct Immediate {
   VkCommandPool commandPool;
 };
 
+struct ComputePushConstants {
+  glm::vec4 data1;
+  glm::vec4 data2;
+  glm::vec4 data3;
+  glm::vec4 data4;
+};
+
+struct ComputeEffect {
+  const char *name;
+  VkPipelineLayout layout;
+  VkPipeline pipeline;
+  ComputePushConstants data;
+};
 class Engine {
 public:
   Engine(uint32_t width, uint32_t height);
@@ -54,13 +69,21 @@ private:
   VmaAllocator Allocator_;
   DeletionQueue DeletionQueue_;
   Image DrawImage_;
+  VkDescriptorSet DrawImageDescriptors_;
+  VkDescriptorSetLayout DrawImageDescriptorLayout_;
+  DescriptorAllocator GlobalDescriptorAllocator_;
   VkExtent2D DrawExtent_;
   Immediate Immediate_;
+
+  std::vector<ComputeEffect> BackgroundEffects_;
+  int CurrentBackgroundEffect_;
 
 private:
   void CreateSwapchain();
   void DestroySwapchain();
   void InitializeCommands();
+  void InitializeDescriptors();
+  void InitializePipelines();
   void InitializeImgui();
   FrameData &GetCurrentFrame() {
     return FrameData_[FrameNumber_ % FRAMES_IN_FLIGHT];

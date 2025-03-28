@@ -4,6 +4,8 @@
 
 class DescriptorLayoutBuilder {
   std::vector<VkDescriptorSetLayoutBinding> bindings;
+
+public:
   void addBinding(uint32_t binding, VkDescriptorType type);
   void clear();
   VkDescriptorSetLayout build(VkDevice device, VkShaderStageFlags shaderStages,
