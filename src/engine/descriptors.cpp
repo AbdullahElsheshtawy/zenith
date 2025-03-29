@@ -53,11 +53,11 @@ void DescriptorAllocator::initializePool(
   vkCreateDescriptorPool(device, &info, nullptr, &pool);
 }
 
-void DescriptorAllocator::clearDescriptors(VkDevice device) {
+void DescriptorAllocator::clearDescriptors(VkDevice device) const {
   vkResetDescriptorPool(device, pool, 0);
 }
 
-void DescriptorAllocator::destroyPool(VkDevice device) {
+void DescriptorAllocator::destroyPool(VkDevice device) const {
   vkDestroyDescriptorPool(device, pool, nullptr);
 }
 

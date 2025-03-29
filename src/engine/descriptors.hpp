@@ -22,8 +22,8 @@ struct DescriptorAllocator {
 
   void initializePool(VkDevice device, uint32_t maxSets,
                       std::span<PoolSizeRatio> poolSizeRatios);
-  void clearDescriptors(VkDevice device);
-  void destroyPool(VkDevice device);
+  void clearDescriptors(VkDevice device) const;
+  void destroyPool(VkDevice device) const;
 
   VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout) const;
 };

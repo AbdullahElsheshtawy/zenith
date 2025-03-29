@@ -4,9 +4,7 @@
     {
       "name": "RelWithDebInfo",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_CXX_COMPILER": "clang",
-        "CMAKE_C_COMPILER": "clang"
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
     },
     {

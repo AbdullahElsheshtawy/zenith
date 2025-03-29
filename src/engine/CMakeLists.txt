@@ -19,11 +19,4 @@ add_dependencies(engine Shaders)
 # https://github.com/zeux/volk/tree/master?tab=readme-ov-file#basic-usage
 target_compile_definitions(engine PUBLIC VK_NO_PROTOTYPES=1)
 
-find_package(Vulkan REQUIRED)
-target_link_libraries(engine PUBLIC Vulkan::Headers SDL3::SDL3 vk-bootstrap::vk-bootstrap volk::volk Vma glm::glm spdlog::spdlog imgui)
-
-if(ZENITH_DEV)
-target_compile_options(zenith PRIVATE -Wall -Wextra -Werror)
-else()
-target_compile_options(zenith PRIVATE -Wall -Wextra)
-endif()
+target_link_libraries(engine PUBLIC SDL3::SDL3 vk-bootstrap::vk-bootstrap volk::volk Vma glm::glm spdlog::spdlog imgui)
