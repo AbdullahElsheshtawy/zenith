@@ -1,6 +1,7 @@
 #include "types.hpp"
 #include <filesystem>
 #include <optional>
+#include <string_view>
 
 namespace util {
 VkCommandPoolCreateInfo commandPoolCreateInfo(uint32_t queueFamilyIdx,
@@ -30,8 +31,8 @@ VkSubmitInfo2 submitInfo(const VkCommandBufferSubmitInfo *cmd,
                          const VkSemaphoreSubmitInfo *signalSemaphoreInfo,
                          const VkSemaphoreSubmitInfo *waitSemaphoreInfo);
 
-bool load_shader_module(const char *filePath, VkDevice device,
-                                VkShaderModule *outShaderModule);
+VkShaderModule loadShaderModule(VkDevice device,
+                                      const std::string_view filePath);
 
 VkImageCreateInfo imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags,
                                   VkExtent3D extent);

@@ -125,50 +125,39 @@ VkSubmitInfo2 util::submitInfo(const VkCommandBufferSubmitInfo *cmd,
   };
 }
 
-bool util::load_shader_module(const char *filePath, VkDevice device,
-                                VkShaderModule *outShaderModule) {
+VkShaderModule util::loadShaderModule(VkDevice device,
+                                      const std::string_view filePath) {
+  VkShaderModule shaderModule = VK_NULL_HANDLE;
   // open the file. With cursor at the end
-  std::ifstream file(filePath, std::ios::ate | std::ios::binary);
+  std::ifstream file(filePath.data(), std::ios::ate | std::ios::binary);
 
   if (!file.is_open()) {
-    return false;
+    spdlog::error("Could not open shader: {}", filePath);
   }
 
-  // find what the size of the file is by looking up the location of the cursor
-  // because the cursor is at the end, it gives the size directly in bytes
   size_t fileSize = (size_t)file.tellg();
 
-  // spirv expects the buffer to be on uint32, so make sure to reserve a int
-  // vector big enough for the entire file
   std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
 
-  // put file cursor at beginning
   file.seekg(0);
 
-  // load the entire file into the buffer
   file.read((char *)buffer.data(), fileSize);
-
-  // now that the file is loaded into the buffer, we can close it
   file.close();
 
-  // create a new shader module, using the buffer we loaded
   VkShaderModuleCreateInfo createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   createInfo.pNext = nullptr;
 
-  // codeSize has to be in bytes, so multply the ints in the buffer by size of
-  // int to know the real size of the buffer
   createInfo.codeSize = buffer.size() * sizeof(uint32_t);
   createInfo.pCode = buffer.data();
 
-  // check that the creation goes well.
-  VkShaderModule shaderModule;
-  if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) !=
-      VK_SUCCESS) {
-    return false;
+  const VkResult res =
+      vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule);
+  if (res != VK_SUCCESS) {
+    spdlog::error("Failed to create {} shader module: {}", filePath,
+                  string_VkResult(res));
   }
-  *outShaderModule = shaderModule;
-  return true;
+  return shaderModule;
 }
 
 VkImageCreateInfo util::imageCreateInfo(VkFormat format,

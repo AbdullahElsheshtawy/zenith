@@ -152,14 +152,14 @@ void Engine::run() {
       ImGui::SliderInt("Effect Index", &CurrentBackgroundEffect_, 0,
                        BackgroundEffects_.size() - 1);
 
-      ImGui::SliderFloat4(
-          "data1", reinterpret_cast<float *>(&selected.data.data1), 0.0, 1.0);
-      ImGui::SliderFloat4(
-          "data2", reinterpret_cast<float *>(&selected.data.data2), 0.0, 1.0);
-      ImGui::SliderFloat4(
-          "data3", reinterpret_cast<float *>(&selected.data.data3), 0.0, 1.0);
-      ImGui::SliderFloat4(
-          "data4", reinterpret_cast<float *>(&selected.data.data4), 0.0, 1.0);
+      ImGui::DragFloat4("data1",
+                        reinterpret_cast<float *>(&selected.data.data1));
+      ImGui::DragFloat4("data2",
+                        reinterpret_cast<float *>(&selected.data.data2));
+      ImGui::DragFloat4("data3",
+                        reinterpret_cast<float *>(&selected.data.data3));
+      ImGui::DragFloat4("data4",
+                        reinterpret_cast<float *>(&selected.data.data4));
     }
     ImGui::End();
     ImGui::Render();
@@ -323,13 +323,10 @@ void Engine::InitializePipelines() {
               .data2 = glm::vec4(0, 0, 1, 1),
           },
   };
-  VkShaderModule gradientShader;
-  VkShaderModule skyShader;
-  if (!util::load_shader_module("../shaders/gradient_color.spv", Device_,
-                                &gradientShader) ||
-      !util::load_shader_module("../shaders/sky.spv", Device_, &skyShader)) {
-    spdlog::error("Failed to build the compute shader\\s");
-  }
+  const VkShaderModule gradientShader =
+      util::loadShaderModule(Device_, "../shaders/gradient_color.spv");
+  const VkShaderModule skyShader =
+      util::loadShaderModule(Device_, "../shaders/sky.spv");
 
   const VkPipelineShaderStageCreateInfo stageInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
