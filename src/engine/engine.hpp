@@ -76,7 +76,10 @@ private:
   Immediate Immediate_;
 
   std::vector<ComputeEffect> BackgroundEffects_;
-  int CurrentBackgroundEffect_;
+  int CurrentBackgroundEffect_{0};
+
+  VkPipelineLayout TrianglePipelineLayout_;
+  VkPipeline TrianglePipeline_;
 
 private:
   void CreateSwapchain();
@@ -85,13 +88,15 @@ private:
   void InitializeDescriptors();
   void InitializePipelines();
   void InitializeImgui();
+  void InitializeTrianglePipeline();
   FrameData &GetCurrentFrame() {
     return FrameData_[FrameNumber_ % FRAMES_IN_FLIGHT];
   };
 
   void Draw();
   void DrawBackground(VkCommandBuffer cmd) const;
+  void DrawGeometry(VkCommandBuffer cmd) const;
   void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const;
   void
-  ImmediateSubmit(std::function<void(VkCommandBuffer cmd)> &&function) const;
+  ImmediateSubmit(const std::function<void(VkCommandBuffer cmd)> &&function) const;
 };

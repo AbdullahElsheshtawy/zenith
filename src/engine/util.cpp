@@ -271,3 +271,23 @@ util::renderingInfo(const VkExtent2D renderExtent,
                          .pDepthAttachment = depthAttachment,
                          .pStencilAttachment = nullptr};
 }
+
+VkPipelineShaderStageCreateInfo
+util::pipelineShaderStageCreateInfo(const VkShaderStageFlagBits stage,
+                                    const VkShaderModule module,
+                                    const std::string_view entryPointName) {
+  return VkPipelineShaderStageCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .pNext = nullptr,
+      .stage = stage,
+      .module = module,
+      .pName = entryPointName.data(),
+  };
+}
+
+VkPipelineLayoutCreateInfo util::pipelineLayoutCreateInfo() {
+  return VkPipelineLayoutCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .pNext = nullptr,
+  };
+}

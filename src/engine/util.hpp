@@ -33,7 +33,7 @@ VkSubmitInfo2 submitInfo(const VkCommandBufferSubmitInfo *cmd,
                          const VkSemaphoreSubmitInfo *waitSemaphoreInfo);
 
 VkShaderModule loadShaderModule(VkDevice device,
-                                      const std::string_view filePath);
+                                const std::string_view filePath);
 
 VkImageCreateInfo imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags,
                                   VkExtent3D extent);
@@ -51,4 +51,11 @@ VkRenderingAttachmentInfo attachementInfo(
 VkRenderingInfo renderingInfo(const VkExtent2D renderExtent,
                               const VkRenderingAttachmentInfo *colorAttachemnt,
                               const VkRenderingAttachmentInfo *depthAttachment);
+
+VkPipelineShaderStageCreateInfo
+pipelineShaderStageCreateInfo(const VkShaderStageFlagBits stage,
+                              const VkShaderModule module,
+                              const std::string_view entryPointName = "main");
+
+VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo();
 } // namespace util

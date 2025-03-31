@@ -10,6 +10,8 @@ target_sources(engine PRIVATE
     "deletion_queue.cpp"
     "descriptors.hpp"
     "descriptors.cpp"
+    "pipelines.hpp"
+    "pipelines.cpp"
 )
 
 

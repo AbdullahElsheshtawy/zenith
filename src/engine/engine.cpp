@@ -2,6 +2,7 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_vulkan.h"
 #include "VkBootstrap.h"
+#include "pipelines.hpp"
 #include "util.hpp"
 #include "vma.hpp"
 #include <optional>
@@ -113,6 +114,7 @@ Engine::Engine(uint32_t width, uint32_t height) : WindowExtent_{width, height} {
   InitializeImgui();
   InitializeDescriptors();
   InitializePipelines();
+  InitializeTrianglePipeline();
 }
 
 void Engine::run() {
@@ -423,6 +425,38 @@ void Engine::InitializeImgui() {
   });
 }
 
+void Engine::InitializeTrianglePipeline() {
+  const VkShaderModule vertShader =
+      util::loadShaderModule(Device_, "../shaders/colored_triangle.spv");
+  const VkShaderModule fragShader =
+      util::loadShaderModule(Device_, "../shaders/colored_triangle.spv");
+
+  const auto pipelineLayoutInfo = util::pipelineLayoutCreateInfo();
+  VK_CHECK(vkCreatePipelineLayout(Device_, &pipelineLayoutInfo, nullptr,
+                                  &TrianglePipelineLayout_));
+
+  TrianglePipeline_ =
+      PipelineBuilder()
+          .Layout(TrianglePipelineLayout_)
+          .Shaders(vertShader, "vertexMain", fragShader, "fragmentMain")
+          .InputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+          .PolygonMode(VK_POLYGON_MODE_FILL)
+          .CullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+          .MultisamplingNone()
+          .DisableBlending()
+          .DisableDepthtest()
+          .ColorAttachmentFormat(DrawImage_.format)
+          .DepthFormat(VK_FORMAT_UNDEFINED)
+          .Build(Device_);
+  vkDestroyShaderModule(Device_, vertShader, nullptr);
+  vkDestroyShaderModule(Device_, fragShader, nullptr);
+
+  DeletionQueue_.Push([&]() {
+    vkDestroyPipelineLayout(Device_, TrianglePipelineLayout_, nullptr);
+    vkDestroyPipeline(Device_, TrianglePipeline_, nullptr);
+  });
+}
+
 void Engine::Draw() {
   FrameData &frame = GetCurrentFrame();
   VK_CHECK(vkWaitForFences(Device_, 1, &frame.renderFence, VK_TRUE,
@@ -450,6 +484,10 @@ void Engine::Draw() {
   DrawBackground(cmd);
 
   util::transitionImage(cmd, DrawImage_.handle, VK_IMAGE_LAYOUT_GENERAL,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  DrawGeometry(cmd);
+  util::transitionImage(cmd, DrawImage_.handle,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
   util::transitionImage(cmd, swapchainImage, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -510,6 +548,26 @@ void Engine::DrawBackground(VkCommandBuffer cmd) const {
                 std::ceil(DrawExtent_.height / 16.0), 1);
 }
 
+void Engine::DrawGeometry(VkCommandBuffer cmd) const {
+  const auto colorAttachment = util::attachementInfo(DrawImage_.view, nullptr);
+  const auto renderInfo =
+      util::renderingInfo(DrawExtent_, &colorAttachment, nullptr);
+  vkCmdBeginRendering(cmd, &renderInfo);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipeline_);
+
+  const VkViewport viewport = {
+      .width = static_cast<float>(DrawExtent_.width),
+      .height = static_cast<float>(DrawExtent_.height),
+      .maxDepth = 1.0,
+  };
+  const VkRect2D scissor = {.extent = DrawExtent_};
+  vkCmdSetViewport(cmd, 0, 1, &viewport);
+  vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+  vkCmdDraw(cmd, 3, 1, 0, 0);
+  vkCmdEndRendering(cmd);
+}
+
 void Engine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const {
   const auto colorAttachment = util::attachementInfo(targetImageView, nullptr);
   const auto renderInfo =
@@ -521,7 +579,7 @@ void Engine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView) const {
 }
 
 void Engine::ImmediateSubmit(
-    std::function<void(VkCommandBuffer cmd)> &&function) const {
+    const std::function<void(VkCommandBuffer cmd)> &&function) const {
 
   VK_CHECK(vkResetFences(Device_, 1, &Immediate_.fence));
   VK_CHECK(vkResetCommandBuffer(Immediate_.commandBuffer, 0));

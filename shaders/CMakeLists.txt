@@ -7,6 +7,7 @@ endif()
 set(shader_files
 	"${CMAKE_CURRENT_SOURCE_DIR}/gradient_color.slang"
 	"${CMAKE_CURRENT_SOURCE_DIR}/sky.slang"
+	"${CMAKE_CURRENT_SOURCE_DIR}/colored_triangle.slang"
 )
 
 add_custom_target(Shaders ALL)
