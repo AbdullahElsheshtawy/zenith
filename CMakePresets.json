@@ -1,16 +1,30 @@
-﻿{
-  "version": 3,
-  "configurePresets": [
-    {
-      "name": "RelWithDebInfo",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-      }
-    },
-    {
-      "name": "Dev",
-      "inherits": "RelWithDebInfo",
-      "environment": { "ZENITH_DEV": "ON" }
-    }
-  ]
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "RelWithDebInfo",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "Dev",
+            "inherits": "RelWithDebInfo",
+            "environment": {
+                "ZENITH_DEV": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "RelWithDebInfo",
+            "configuration": "RelWithDebInfo",
+            "configurePreset": "RelWithDebInfo"
+        },
+        {
+            "name": "Dev",
+            "configuration": "RelWithDebInfo",
+            "configurePreset": "Dev"
+        }
+    ]
 }
